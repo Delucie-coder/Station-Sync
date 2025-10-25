@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SPIRO Station Manager</title>
+
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+  <!-- Chart.js for simple performance chart -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Main CSS -->
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="container">
+      <h1><i class="fa-solid fa-bolt"></i> SPIRO Station Manager</h1>
+      <div class="meta">
+        <button id="exportCsvBtn" class="btn">Export CSV</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="grid">
+      <div class="panel panel--form">
+        <h2>Register New Station</h2>
+        <form id="stationForm" autocomplete="off">
+          <label>Station Name
+            <input id="stationName" required placeholder="e.g., Kigali Central Station" />
+          </label>
+
+          <label>Holder / Contact
+            <input id="stationContact" placeholder="Phone or email" />
+          </label>
+
+          <label>Location
+            <input id="stationLocation" placeholder="City / Zone" />
+          </label>
+
+          <label>Station Type
+            <select id="stationType">
+              <option value="Assembly">Assembly</option>
+              <option value="Service">Service</option>
+              <option value="Old Warehouse">Old Warehouse</option>
+            </select>
+          </label>
+
+          <label>Initial Battery Count
+            <input id="batteryCount" type="number" min="0" value="0" />
+          </label>
+
+          <label>Status
+            <select id="stationStatus">
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+          </label>
+
+          <div class="form-actions">
+            <button type="submit" class="btn primary">Register Station</button>
+            <button type="button" id="resetForm" class="btn">Reset</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="panel panel--dashboard">
+        <div class="dashboard-header">
+          <h2>Stations Dashboard</h2>
+          <div class="controls">
+            <input id="searchInput" placeholder="Search by name or id..." />
+            <select id="filterType">
+              <option value="">All Types</option>
+              <option value="Assembly">Assembly</option>
+              <option value="Service">Service</option>
+              <option value="Old Warehouse">Old Warehouse</option>
+            </select>
+            <select id="filterStatus">
+              <option value="">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+            </select>
+            <button id="toggleView" class="btn">Toggle View</button>
+          </div>
+        </div>
+
+        <div id="cardsView" class="cards"></div>
+
+        <div class="table-wrapper">
+          <table id="stationsTable" class="table">
+            <thead>
+              <tr>
+                <th>ID</th><th>Name</th><th>Location</th><th>Type</th><th>Battery Count</th><th>Status</th><th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+      </div>
+    </section>
+
+    <section class="panel panel--chart">
+      <h2>Stations Overview</h2>
+      <canvas id="stationsChart" height="80"></canvas>
+    </section>
+  </main>
+
+  <!-- Modal for Viewing / Editing -->
+  <div id="modal" class="modal hidden" role="dialog" aria-hidden="true">
+    <div class="modal-content">
+      <button id="modalClose" class="modal-close" title="Close"><i class="fa-solid fa-xmark"></i></button>
+      <h3 id="modalTitle">Station Details</h3>
+
+      <form id="modalForm">
+        <input type="hidden" id="modalStationId" />
+        <label>Station Name <input id="modalName" /></label>
+        <label>Contact <input id="modalContact" /></label>
+        <label>Location <input id="modalLocation" /></label>
+        <label>Type <select id="modalType">
+          <option>Assembly</option><option>Service</option><option>Old Warehouse</option>
+        </select></label>
+        <label>Battery Count <input id="modalBatteryCount" type="number" min="0" /></label>
+        <label>Status <select id="modalStatus"><option>Active</option><option>Inactive</option></select></label>
+
+        <div class="form-actions">
+          <button type="submit" class="btn primary">Save Changes</button>
+          <button type="button" id="modalDelete" class="btn danger">Delete Station</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+      <small>SPIRO Station Manager prototype — for internship artefact demonstration</small>
+      <small>Tip: Data persists in your browser (localStorage).</small>
+    </div>
+  </footer>
+
+  <!-- App JS -->
+  <script src="app.js"></script>
+</body>
+</html>
