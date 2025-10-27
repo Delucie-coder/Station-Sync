@@ -1,73 +1,105 @@
-/* Simple modern styles for the prototype */
-/* Use a readable system font stack */
+/* StationSync styles - gradient navy theme, sidebar layout */
+
+/* color tokens */
 :root{
-  --bg:#0f1724;
-  --panel:#0b1220;
-  --accent:#0ea5a6;
-  --muted:#94a3b8;
-  --card:#071025;
+  --navy-900: #001428;
+  --navy-800: #002a52;
+  --navy-700: #003a72;
+  --accent: #06b6b4;
+  --muted: #94a3b8;
+  --card: rgba(255,255,255,0.03);
   --glass: rgba(255,255,255,0.03);
-  --danger:#ef4444;
+  --danger: #ef4444;
+  --maxWidth: 1200px;
 }
 
 *{box-sizing:border-box}
-html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;}
-body{background:linear-gradient(180deg,#071025 0%, #07192a 70%); color:#e6eef6;}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;color:#e6eef6;background:linear-gradient(180deg,var(--navy-900),var(--navy-700));}
 
-/* Container */
-.container{max-width:1100px;margin:0 auto;padding:18px}
+/* utility */
+.hidden{display:none}
+.muted{color:var(--muted);font-size:13px}
 
-/* Topbar */
-.topbar{background:linear-gradient(90deg,#07142a,#071022);border-bottom:1px solid rgba(255,255,255,0.03);padding:12px 0;margin-bottom:18px}
-.topbar h1{font-size:20px;margin:0;display:flex;gap:10px;align-items:center}
-.topbar .meta{margin-left:auto}
-.btn{background:var(--glass);color:var(--muted);border:1px solid rgba(255,255,255,0.03);padding:8px 12px;border-radius:8px;cursor:pointer}
-.btn.primary{background:linear-gradient(90deg,var(--accent),#06b6b4);color:#021019;border:none}
-.btn.danger{background:var(--danger);color:white;border:none}
-.btn:active{transform:translateY(1px)}
+/* app layout */
+.app{display:flex;height:100vh;max-width:100vw}
+.sidebar{
+  width:260px;background:linear-gradient(180deg,var(--navy-800),var(--navy-900));padding:18px;display:flex;flex-direction:column;border-right:1px solid rgba(255,255,255,0.03)
+}
+.brand{display:flex;align-items:center;gap:12px;margin-bottom:18px}
+.brand img{width:46px;height:46px;object-fit:contain;border-radius:6px}
+.brand-title .title{font-weight:700;font-size:18px}
+.brand-title .subtitle{font-size:12px;color:var(--muted)}
 
-/* Grid layout */
-.grid{display:grid;grid-template-columns:360px 1fr;gap:18px;align-items:start}
-.panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:12px;padding:16px;border:1px solid rgba(255,255,255,0.03)}
-.panel--form label, .panel--form input, .panel--form select{display:block;width:100%}
-.panel--form label{margin-bottom:10px; font-size:13px}
-.panel--form input, .panel--form select{padding:8px;border-radius:8px;background:transparent;border:1px solid rgba(255,255,255,0.03);color:inherit}
-.form-actions{display:flex;gap:8px;margin-top:8px}
+.nav{display:flex;flex-direction:column;gap:8px}
+.nav-item{background:transparent;color:inherit;border:none;text-align:left;padding:10px 12px;border-radius:8px;cursor:pointer;font-size:14px;display:flex;gap:10px;align-items:center}
+.nav-item i{width:18px;text-align:center}
+.nav-item:hover{background:rgba(255,255,255,0.02)}
+.nav-item.active{background:linear-gradient(90deg,var(--accent),#0891b2);color:#021019;font-weight:700}
 
-/* Dashboard */
-.dashboard-header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
-.controls{display:flex;gap:8px;align-items:center}
-.controls input, .controls select{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
+.spacer{flex:1}
+.sidebar-footer{margin-top:12px;font-size:12px;color:var(--muted)}
 
-/* Cards view */
-.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-bottom:12px}
-.card{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.02)}
-.card .title{font-weight:600;margin-bottom:6px}
-.tag{display:inline-block;padding:6px 8px;border-radius:999px;font-size:12px}
-.tag.active{background:rgba(14,165,166,0.12);color:var(--accent)}
-.tag.inactive{background:rgba(239,68,68,0.08);color:var(--danger)}
+/* main area */
+.main{flex:1;padding:18px;overflow:auto}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.top-left h2{margin:0;font-size:20px}
+.top-right input{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit;width:320px}
 
-/* Table */
+/* cards */
+.cards{display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.card{flex:1;min-width:150px;background:var(--card);padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,0.02)}
+.card-title{font-size:13px;color:var(--muted)}
+.card-value{font-size:20px;font-weight:700;margin-top:6px}
+
+/* panels */
+.panel{background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,0.03);margin-bottom:12px}
+.panel--form label{display:block;margin-bottom:10px}
+.panel--form input, .panel--form select{width:100%;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
+
+/* table */
 .table{width:100%;border-collapse:collapse}
-.table thead th{font-weight:600;text-align:left;padding:8px;border-bottom:1px solid rgba(255,255,255,0.03)}
+.table thead th{padding:10px;text-align:left;border-bottom:1px solid rgba(255,255,255,0.03);font-size:13px;color:var(--muted)}
 .table tbody td{padding:10px;border-bottom:1px solid rgba(255,255,255,0.02);font-size:13px}
-.table .actions button{margin-right:6px}
 
-/* Chart panel */
-.panel--chart{margin-top:18px}
+/* form */
+.form-actions{display:flex;gap:8px;margin-top:8px}
+.btn{padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:var(--muted);cursor:pointer}
+.btn.primary{background:linear-gradient(90deg,var(--accent),#0891b2);color:#021019;border:none}
+.btn.danger{background:var(--danger);color:white;border:none}
 
-/* Modal */
-.modal{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,23,0.6);padding:12px;z-index:40}
-.modal.hidden{display:none}
-.modal-content{background:linear-gradient(180deg,#081127,#05101b);padding:18px;border-radius:12px;width:100%;max-width:640px;position:relative;border:1px solid rgba(255,255,255,0.03)}
-.modal-close{position:absolute;top:12px;right:12px;background:transparent;border:none;color:inherit;font-size:18px;cursor:pointer}
-.modal form label{display:block;margin-bottom:10px}
+/* login screen */
+.login-screen{display:flex;align-items:center;justify-content:center;height:100vh;width:100%}
+.login-card{width:360px;background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:24px;border-radius:12px;text-align:center;border:1px solid rgba(255,255,255,0.03)}
+.login-card .logo{width:72px;height:72px;object-fit:contain;margin:0 auto 8px;display:block}
+.login-card h1{margin:8px 0}
+.login-card input{width:100%;padding:10px;margin-top:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.03);background:transparent;color:inherit}
 
-/* Footer */
-.footer{padding:12px 0;margin-top:22px;color:var(--muted);font-size:13px;text-align:center;border-top:1px solid rgba(255,255,255,0.02)}
+.user-badge{margin-left:12px;padding:6px 10px;border-radius:10px;background:rgba(255,255,255,0.03);font-size:13px;color:var(--muted);display:inline-block}
+.user-badge.hidden{display:none}
 
-/* Responsive */
+.login-card h2{margin:6px 0}
+
+/* modal */
+/* modal styles removed (edit modal was deleted) */
+
+/* auth gate (blocks UI until login) */
+.auth-gate{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.6);z-index:2000}
+.auth-gate.hidden{display:none}
+.auth-gate-card{background:linear-gradient(180deg,#071428,#031426);padding:18px;border-radius:10px;border:1px solid rgba(255,255,255,0.04);text-align:center;color:inherit}
+.auth-gate-card h3{margin:0 0 6px}
+
+/* visually disable app when locked */
+.app.locked{pointer-events:none;opacity:0.4;filter:grayscale(10%)}
+
+/* prevent background scrolling when auth gate active */
+.no-scroll{overflow:hidden;height:100vh}
+
+/* responsive */
 @media (max-width:900px){
-  .grid{grid-template-columns:1fr; }
-  .controls{flex-wrap:wrap}
+  .sidebar{width:72px;padding:12px}
+  .brand-title{display:none}
+  .top-right input{width:180px}
+  .cards{flex-direction:column}
+  .login-card{width:320px}
+  .main{padding:12px}
 }

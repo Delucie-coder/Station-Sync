@@ -3,145 +3,202 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SPIRO Station Manager</title>
+  <title>StationSync — SPIRO</title>
 
-  <!-- Font Awesome for icons -->
+  <!-- Font Awesome (icons) -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
 
-  <!-- Chart.js for simple performance chart -->
+  <!-- Chart.js -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <!-- Main CSS -->
-  <link rel="stylesheet" href="styles.css" />
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="container">
-      <h1><i class="fa-solid fa-bolt"></i> SPIRO Station Manager</h1>
-      <div class="meta">
-        <button id="exportCsvBtn" class="btn">Export CSV</button>
-      </div>
-    </div>
-  </header>
 
-  <main class="container">
-    <section class="grid">
-      <div class="panel panel--form">
-        <h2>Register New Station</h2>
-        <form id="stationForm" autocomplete="off">
-          <label>Station Name
-            <input id="stationName" required placeholder="e.g., Kigali Central Station" />
-          </label>
+  <!-- ===== Login Screen ===== -->
+  <div id="loginScreen" class="screen login-screen">
+    <div class="login-card">
+      <h1>StationSync</h1>
+      <p class="muted">Sign in to manage stations and view IoT analytics</p>
 
-          <label>Holder / Contact
-            <input id="stationContact" placeholder="Phone or email" />
-          </label>
-
-          <label>Location
-            <input id="stationLocation" placeholder="City / Zone" />
-          </label>
-
-          <label>Station Type
-            <select id="stationType">
-              <option value="Assembly">Assembly</option>
-              <option value="Service">Service</option>
-              <option value="Old Warehouse">Old Warehouse</option>
-            </select>
-          </label>
-
-          <label>Initial Battery Count
-            <input id="batteryCount" type="number" min="0" value="0" />
-          </label>
-
-          <label>Status
-            <select id="stationStatus">
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-          </label>
-
-          <div class="form-actions">
-            <button type="submit" class="btn primary">Register Station</button>
-            <button type="button" id="resetForm" class="btn">Reset</button>
-          </div>
-        </form>
-      </div>
-
-      <div class="panel panel--dashboard">
-        <div class="dashboard-header">
-          <h2>Stations Dashboard</h2>
-          <div class="controls">
-            <input id="searchInput" placeholder="Search by name or id..." />
-            <select id="filterType">
-              <option value="">All Types</option>
-              <option value="Assembly">Assembly</option>
-              <option value="Service">Service</option>
-              <option value="Old Warehouse">Old Warehouse</option>
-            </select>
-            <select id="filterStatus">
-              <option value="">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-            </select>
-            <button id="toggleView" class="btn">Toggle View</button>
-          </div>
-        </div>
-
-        <div id="cardsView" class="cards"></div>
-
-        <div class="table-wrapper">
-          <table id="stationsTable" class="table">
-            <thead>
-              <tr>
-                <th>ID</th><th>Name</th><th>Location</th><th>Type</th><th>Battery Count</th><th>Status</th><th>Actions</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-
-      </div>
-    </section>
-
-    <section class="panel panel--chart">
-      <h2>Stations Overview</h2>
-      <canvas id="stationsChart" height="80"></canvas>
-    </section>
-  </main>
-
-  <!-- Modal for Viewing / Editing -->
-  <div id="modal" class="modal hidden" role="dialog" aria-hidden="true">
-    <div class="modal-content">
-      <button id="modalClose" class="modal-close" title="Close"><i class="fa-solid fa-xmark"></i></button>
-      <h3 id="modalTitle">Station Details</h3>
-
-      <form id="modalForm">
-        <input type="hidden" id="modalStationId" />
-        <label>Station Name <input id="modalName" /></label>
-        <label>Contact <input id="modalContact" /></label>
-        <label>Location <input id="modalLocation" /></label>
-        <label>Type <select id="modalType">
-          <option>Assembly</option><option>Service</option><option>Old Warehouse</option>
-        </select></label>
-        <label>Battery Count <input id="modalBatteryCount" type="number" min="0" /></label>
-        <label>Status <select id="modalStatus"><option>Active</option><option>Inactive</option></select></label>
-
+      <form id="loginForm" autocomplete="off">
+        <label>
+          <input id="loginUser" type="text" placeholder="Username or email" required />
+        </label>
+        <label>
+          <input id="loginPass" type="password" placeholder="Password" required />
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;justify-content:center;margin-top:8px">
+          <input id="rememberMe" type="checkbox" />
+          <span class="muted">Remember me</span>
+        </label>
         <div class="form-actions">
-          <button type="submit" class="btn primary">Save Changes</button>
-          <button type="button" id="modalDelete" class="btn danger">Delete Station</button>
+          <button type="submit" class="btn primary">Login</button>
+          <button type="button" id="showRegister" class="btn">Register</button>
         </div>
       </form>
+
+      <small class="muted">(Prototype — accepts any non-empty credentials)</small>
+    </div>
+    <!-- Register form (hidden by default) -->
+    <div class="login-card hidden" id="registerCard" style="margin-top:14px">
+      <h2>Create account</h2>
+      <form id="registerForm" autocomplete="off">
+        <label><input id="regUser" type="text" placeholder="Choose a username" required /></label>
+        <label><input id="regPass" type="password" placeholder="Password" required /></label>
+        <label><input id="regPass2" type="password" placeholder="Confirm password" required /></label>
+        <div class="form-actions">
+          <button type="submit" class="btn primary">Create account</button>
+          <button type="button" id="showLogin" class="btn">Back to Login</button>
+        </div>
+      </form>
+      <small class="muted">Passwords are hashed locally (demo only).</small>
     </div>
   </div>
 
-  <footer class="footer">
-    <div class="container">
-      <small>SPIRO Station Manager prototype — for internship artefact demonstration</small>
-      <small>Tip: Data persists in your browser (localStorage).</small>
+  <!-- ===== Main App (hidden until login) ===== -->
+  <div id="app" class="app hidden">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-title">
+          <div class="title">StationSync</div>
+          <div class="subtitle">SPIRO</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-page="dashboard"><i class="fa-solid fa-chart-simple"></i> Dashboard</button>
+        <button class="nav-item" data-page="register"><i class="fa-solid fa-square-plus"></i> Register Station</button>
+        <button class="nav-item" data-page="analytics"><i class="fa-solid fa-analytics"></i> Analytics</button>
+        <div class="spacer"></div>
+        <button id="logoutBtn" class="nav-item bottom"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+      </nav>
+
+      <div class="sidebar-footer muted">StationSync prototype • data stored in browser</div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="top-left">
+          <h2 id="pageTitle">Dashboard</h2>
+          <small id="pageSubtitle" class="muted">Overview of registered stations</small>
+        </div>
+        <div class="top-right">
+          <input id="globalSearch" placeholder="Search stations by name, location or id..." />
+          <div id="userBadge" class="user-badge hidden"></div>
+        </div>
+      </header>
+
+      <!-- Pages -->
+      <section id="dashboard" class="page">
+        <div class="cards">
+          <div class="card">
+            <div class="card-title">Total Stations</div>
+            <div id="totalStations" class="card-value">0</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Active Stations</div>
+            <div id="activeStations" class="card-value">0</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Inactive Stations</div>
+            <div id="inactiveStations" class="card-value">0</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Total Batteries</div>
+            <div id="totalBatteries" class="card-value">0</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Stations List</h3>
+          <div class="table-wrap">
+            <table id="stationsTable" class="table">
+              <thead>
+                <tr>
+                  <th>ID</th><th>Name</th><th>Location</th><th>Type</th><th>Battery Count</th><th>Status</th><th>IoT Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="register" class="page hidden">
+        <div class="panel panel--form">
+          <h3>Register New Station</h3>
+          <form id="stationForm" autocomplete="off">
+            <label>Station Name <input id="stationName" required placeholder="e.g., Kimironko East" /></label>
+            <label>Contact <input id="stationContact" placeholder="Phone or email" /></label>
+            <label>Location (district/suburb) <input id="stationLocation" placeholder="e.g., Kimironko, Nyarugenge" /></label>
+            <label>Station Type
+              <select id="stationType">
+                <option>Assembly</option>
+                <option>Service</option>
+                <option>Retail</option>
+              </select>
+            </label>
+            <label>Initial Battery Count <input id="batteryCount" type="number" min="0" value="0" /></label>
+            <label>Status
+              <select id="stationStatus">
+                <option>Active</option>
+                <option>Inactive</option>
+              </select>
+            </label>
+            <label>IoT Status
+              <select id="iotStatus">
+                <option>Idle</option>
+                <option>Charging</option>
+                <option>Active</option>
+                <option>Under maintenance</option>
+                <option>Inactive</option>
+              </select>
+            </label>
+
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Register Station</button>
+              <button type="button" id="resetForm" class="btn">Reset</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="analytics" class="page hidden">
+        <div class="panel">
+          <h3>IoT Status Overview</h3>
+          <canvas id="iotChart" height="120"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Station Distribution by Location (sample)</h3>
+          <div id="locationList" class="location-list"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Auth gate overlay: blocks the app until the user logs in -->
+  <div id="authGate" class="auth-gate hidden">
+    <div class="auth-gate-card">
+      <h3>Please sign in</h3>
+      <p class="muted">You must log in before accessing StationSync.</p>
+      <button id="authGateLogin" class="btn primary">Go to Login</button>
     </div>
+  </div>
+
+  <!-- Modal removed as requested. Edit modal and its markup were deleted. -->
+
+  <!-- Footer note (small) -->
+  <footer class="app-footer hidden">
+    <small class="muted">StationSync — Prototype by [Your Name] • Data stored locally in browser</small>
   </footer>
 
-  <!-- App JS -->
-  <script src="app.js"></script>
+  <!-- App logic -->
+  <script src="script.js"></script>
 </body>
 </html>
