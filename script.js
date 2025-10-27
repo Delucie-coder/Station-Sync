@@ -39,8 +39,25 @@ async function checkSession(){
     const res = await fetch(API_BASE + '/api/session', { headers });
     if (!res.ok) return false;
     const j = await res.json();
-    if (j.user){ currentUser = j.user; showUser(currentUser); unlockUI(); return true; }
-    currentUser = null; lockUI(); return false;
+    if (j.user){
+      currentUser = j.user; showUser(currentUser);
+      // if we are on the login page, navigate to the app page
+      if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/' ){
+        window.location.href = 'app.html';
+        return true;
+      }
+      // otherwise unlock UI if app is present
+      unlockUI();
+      return true;
+    }
+    currentUser = null;
+    // if we're on the app page but not authenticated, send user back to login
+    if (window.location.pathname.endsWith('app.html')){
+      window.location.href = 'index.html';
+      return false;
+    }
+    lockUI();
+    return false;
   } catch(e){ currentUser = null; lockUI(); return false; }
 }
 
@@ -303,20 +320,15 @@ if (loginForm){
     if (!u) return alert('Enter username.');
 
     try{
-      await serverLogin(u, p, remember);
-      unlockUI();
-      loginScreen.classList.add('hidden');
-      appEl.classList.remove('hidden');
-      setActiveNav('dashboard');
+        await serverLogin(u, p, remember);
+        // navigate to the separate app page after successful login
+        window.location.href = 'app.html';
       return;
     } catch(err){
       // try auto-login for registered users
       const ok = await tryAutoLogin(u);
       if (ok){
-        unlockUI();
-        loginScreen.classList.add('hidden');
-        appEl.classList.remove('hidden');
-        setActiveNav('dashboard');
+          window.location.href = 'app.html';
         return;
       }
       alert(err.message || 'Login failed');

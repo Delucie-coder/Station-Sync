@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>StationSync — App</title>
+
+  <!-- Font Awesome (icons) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Main stylesheet -->
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===== Main App (requires login) ===== -->
+  <div id="app" class="app">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-title">
+          <div class="title">StationSync</div>
+          <div class="subtitle">SPIRO</div>
+        </div>
+      </div>
+
+      <nav class="nav">
+        <button class="nav-item active" data-page="dashboard"><i class="fa-solid fa-chart-simple"></i> Dashboard</button>
+        <button class="nav-item" data-page="register"><i class="fa-solid fa-square-plus"></i> Register Station</button>
+        <button class="nav-item" data-page="analytics"><i class="fa-solid fa-analytics"></i> Analytics</button>
+        <div class="spacer"></div>
+        <button id="logoutBtn" class="nav-item bottom"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+      </nav>
+
+      <div class="sidebar-footer muted">StationSync prototype • data stored in browser</div>
+    </aside>
+
+    <!-- Main content -->
+    <main class="main">
+      <!-- Topbar -->
+      <header class="topbar">
+        <div class="top-left">
+          <h2 id="pageTitle">Dashboard</h2>
+          <small id="pageSubtitle" class="muted">Overview of registered stations</small>
+        </div>
+        <div class="top-right">
+          <input id="globalSearch" placeholder="Search stations by name, location or id..." />
+          <div id="userBadge" class="user-badge hidden"></div>
+        </div>
+      </header>
+
+      <!-- Pages -->
+      <section id="dashboard" class="page">
+        <div class="cards">
+          <div class="card">
+            <div class="card-title">Total Stations</div>
+            <div id="totalStations" class="card-value">0</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Active Stations</div>
+            <div id="activeStations" class="card-value">0</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Inactive Stations</div>
+            <div id="inactiveStations" class="card-value">0</div>
+          </div>
+          <div class="card">
+            <div class="card-title">Total Batteries</div>
+            <div id="totalBatteries" class="card-value">0</div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h3>Stations List</h3>
+          <div class="table-wrap">
+            <table id="stationsTable" class="table">
+              <thead>
+                <tr>
+                  <th>ID</th><th>Name</th><th>Location</th><th>Type</th><th>Battery Count</th><th>Status</th><th>IoT Status</th><th>Actions</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section id="register" class="page hidden">
+        <div class="panel panel--form">
+          <h3>Register New Station</h3>
+          <form id="stationForm" autocomplete="off">
+            <label>Station Name <input id="stationName" required placeholder="e.g., Kimironko East" /></label>
+            <label>Contact <input id="stationContact" placeholder="Phone or email" /></label>
+            <label>Location (district/suburb) <input id="stationLocation" placeholder="e.g., Kimironko, Nyarugenge" /></label>
+            <label>Station Type
+              <select id="stationType">
+                <option>Assembly</option>
+                <option>Service</option>
+                <option>Retail</option>
+              </select>
+            </label>
+            <label>Initial Battery Count <input id="batteryCount" type="number" min="0" value="0" /></label>
+            <label>Status
+              <select id="stationStatus">
+                <option>Active</option>
+                <option>Inactive</option>
+              </select>
+            </label>
+            <label>IoT Status
+              <select id="iotStatus">
+                <option>Idle</option>
+                <option>Charging</option>
+                <option>Active</option>
+                <option>Under maintenance</option>
+                <option>Inactive</option>
+              </select>
+            </label>
+
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Register Station</button>
+              <button type="button" id="resetForm" class="btn">Reset</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section id="analytics" class="page hidden">
+        <div class="panel">
+          <h3>IoT Status Overview</h3>
+          <canvas id="iotChart" height="120"></canvas>
+        </div>
+        <div class="panel">
+          <h3>Station Distribution by Location (sample)</h3>
+          <div id="locationList" class="location-list"></div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- Footer note (small) -->
+  <footer class="app-footer">
+    <small class="muted">StationSync — Prototype by [Your Name] • Data stored locally in browser</small>
+  </footer>
+
+  <!-- App logic -->
+  <script src="script.js"></script>
+</body>
+</html>
