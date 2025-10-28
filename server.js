@@ -7,6 +7,8 @@ const fs = require('fs');
 const path = require('path');
 
 const USERS_FILE = path.join(__dirname, 'users.json');
+const STATIONS_FILE = path.join(__dirname, 'stations.json');
+const RECORDS_FILE = path.join(__dirname, 'records.json');
 
 function loadUsers(){
   try { return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8') || '{}'); } catch(e){ return {}; }
@@ -14,6 +16,22 @@ function loadUsers(){
 
 function saveUsers(u){
   try { fs.writeFileSync(USERS_FILE, JSON.stringify(u, null, 2)); } catch(e){ console.error('Failed to save users', e); }
+}
+
+function loadStations(){
+  try { return JSON.parse(fs.readFileSync(STATIONS_FILE, 'utf8') || '[]'); } catch(e){ return []; }
+}
+
+function saveStations(s){
+  try { fs.writeFileSync(STATIONS_FILE, JSON.stringify(s, null, 2)); } catch(e){ console.error('Failed to save stations', e); }
+}
+
+function loadRecords(){
+  try { return JSON.parse(fs.readFileSync(RECORDS_FILE, 'utf8') || '[]'); } catch(e){ return []; }
+}
+
+function saveRecords(r){
+  try { fs.writeFileSync(RECORDS_FILE, JSON.stringify(r, null, 2)); } catch(e){ console.error('Failed to save records', e); }
 }
 
 const app = express();
@@ -124,6 +142,133 @@ app.get('/api/users', (req, res) => {
     const users = loadUsers();
     return res.json({ users: Object.keys(users) });
   } catch(e){ return res.status(500).json({ message: 'Server error' }); }
+});
+
+// Stations API
+app.get('/api/stations', (req, res) => {
+  try{
+    const stations = loadStations();
+    return res.json({ stations });
+  } catch(e){ console.error(e); return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.post('/api/stations', (req, res) => {
+  try{
+    const { name, contact, location, type, batteryCount, status, iotStatus } = req.body || {};
+    if (!name) return res.status(400).json({ message: 'Missing station name' });
+    const stations = loadStations();
+    const id = 'ST' + Date.now().toString(36).slice(-6).toUpperCase();
+    const newStation = { id, name, contact, location, type, batteryCount: Number(batteryCount)||0, status: status||'Active', iotStatus: iotStatus||'Idle', createdAt: new Date().toISOString() };
+    stations.unshift(newStation);
+    saveStations(stations);
+    return res.json({ station: newStation });
+  } catch(e){ console.error(e); return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.put('/api/stations/:id', (req, res) => {
+  try{
+    const id = req.params.id;
+    const stations = loadStations();
+    const idx = stations.findIndex(s => s.id === id);
+    if (idx === -1) return res.status(404).json({ message: 'Station not found' });
+    const upd = Object.assign({}, stations[idx], req.body);
+    stations[idx] = upd;
+    saveStations(stations);
+    return res.json({ station: upd });
+  } catch(e){ console.error(e); return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.delete('/api/stations/:id', (req, res) => {
+  try{
+    const id = req.params.id;
+    let stations = loadStations();
+    stations = stations.filter(s => s.id !== id);
+    saveStations(stations);
+    // also remove records
+    let records = loadRecords();
+    records = records.filter(r => r.stationId !== id);
+    saveRecords(records);
+    return res.json({ ok: true });
+  } catch(e){ console.error(e); return res.status(500).json({ message: 'Server error' }); }
+});
+
+// Records API
+app.get('/api/stations/:id/records', (req, res) => {
+  try{
+    const stationId = req.params.id;
+    const records = loadRecords().filter(r => r.stationId === stationId).sort((a,b)=> b.createdAt.localeCompare(a.createdAt));
+    return res.json({ records });
+  } catch(e){ console.error(e); return res.status(500).json({ message: 'Server error' }); }
+});
+
+app.post('/api/stations/:id/records', (req, res) => {
+  try{
+    const stationId = req.params.id;
+    const { date, startOfDay, givenOut, remaining, needRepair, damaged, notes } = req.body || {};
+    if (!date) return res.status(400).json({ message: 'Missing date' });
+    // Upsert behavior: if a record for this station+date exists, update it.
+    const records = loadRecords();
+    const existingIdx = records.findIndex(r => r.stationId === stationId && r.date === date);
+    if (existingIdx !== -1){
+      // update existing record
+      const upd = Object.assign({}, records[existingIdx], {
+        startOfDay: Number(startOfDay)||0,
+        givenOut: Number(givenOut)||0,
+        remaining: Number(remaining)||0,
+        needRepair: Number(needRepair)||0,
+        damaged: Number(damaged)||0,
+        notes: notes||'',
+        updatedAt: new Date().toISOString()
+      });
+      records[existingIdx] = upd;
+      saveRecords(records);
+      return res.json({ record: upd, updated: true });
+    }
+
+    const rid = 'R' + Date.now().toString(36).slice(-8).toUpperCase();
+    const rec = { id: rid, stationId, date, startOfDay: Number(startOfDay)||0, givenOut: Number(givenOut)||0, remaining: Number(remaining)||0, needRepair: Number(needRepair)||0, damaged: Number(damaged)||0, notes: notes||'', createdAt: new Date().toISOString() };
+    records.unshift(rec);
+    saveRecords(records);
+    return res.json({ record: rec, created: true });
+  } catch(e){ console.error(e); return res.status(500).json({ message: 'Server error' }); }
+});
+
+// Edit a specific record by id
+app.put('/api/stations/:id/records/:rid', (req, res) => {
+  try{
+    const stationId = req.params.id;
+    const rid = req.params.rid;
+    const { date, startOfDay, givenOut, remaining, needRepair, damaged, notes } = req.body || {};
+    const records = loadRecords();
+    const idx = records.findIndex(r => r.id === rid && r.stationId === stationId);
+    if (idx === -1) return res.status(404).json({ message: 'Record not found' });
+    const updated = Object.assign({}, records[idx], {
+      date: date || records[idx].date,
+      startOfDay: Number(startOfDay)||Number(records[idx].startOfDay)||0,
+      givenOut: Number(givenOut)||Number(records[idx].givenOut)||0,
+      remaining: Number(remaining)||Number(records[idx].remaining)||0,
+      needRepair: Number(needRepair)||Number(records[idx].needRepair)||0,
+      damaged: Number(damaged)||Number(records[idx].damaged)||0,
+      notes: typeof notes === 'undefined' ? records[idx].notes : notes,
+      updatedAt: new Date().toISOString()
+    });
+    records[idx] = updated;
+    saveRecords(records);
+    return res.json({ record: updated });
+  } catch(e){ console.error(e); return res.status(500).json({ message: 'Server error' }); }
+});
+
+// Delete a specific record by id
+app.delete('/api/stations/:id/records/:rid', (req, res) => {
+  try{
+    const stationId = req.params.id;
+    const rid = req.params.rid;
+    let records = loadRecords();
+    const before = records.length;
+    records = records.filter(r => !(r.id === rid && r.stationId === stationId));
+    saveRecords(records);
+    return res.json({ ok: true, removed: before - records.length });
+  } catch(e){ console.error(e); return res.status(500).json({ message: 'Server error' }); }
 });
 
 // Development helper: auto-login a registered user without a password.

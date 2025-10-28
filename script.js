@@ -90,10 +90,21 @@ async function checkSession(){
     if (!res.ok) return false;
     const j = await res.json();
     if (j.user){
-      currentUser = j.user; showUser(currentUser);
-      // if we are on the login page, navigate to the app page
+      currentUser = j.user;
+      showUser(currentUser);
+      // If we're on the login page, do NOT auto-redirect to the app to avoid a flash of the app UI.
+      // Instead, show a "Continue session" button allowing the user to explicitly enter the app.
       if (window.location.pathname.endsWith('index.html') || window.location.pathname === '/' ){
-        window.location.href = 'app.html';
+        try{
+          const resumeBtn = document.getElementById('resumeSessionBtn');
+          if (resumeBtn){
+            resumeBtn.style.display = 'inline-block';
+            resumeBtn.textContent = `Continue as ${currentUser}`;
+            resumeBtn.onclick = () => { window.location.href = 'app.html'; };
+          }
+        }catch(e){}
+        // keep login screen visible and locked UI state; user chooses to continue
+        lockUI();
         return true;
       }
       // otherwise unlock UI if app is present
@@ -478,6 +489,7 @@ function render(){
       <td>${escape(s.status)}</td>
       <td>${escape(s.iotStatus)}</td>
       <td>
+        <button class="btn" data-action="view" data-id="${s.id}"><i class="fa-solid fa-eye"></i></button>
         <button class="btn danger" data-action="delete" data-id="${s.id}"><i class="fa-solid fa-trash"></i></button>
       </td>
     `;
@@ -530,6 +542,9 @@ document.addEventListener('click', (e) => {
     stations = stations.filter(s => s.id !== id);
     saveData(stations);
     render();
+  }
+  if (action === 'view'){
+    openStationModal(id);
   }
 });
 
@@ -607,4 +622,146 @@ function init(){
 init();
 
 // ---------- User account helpers (register/verify) ----------
+
+// ---------- Station modal & records ----------
+const stationModal = document.getElementById('stationModal');
+const closeStationModalBtn = document.getElementById('closeStationModal');
+const modalStationName = document.getElementById('modalStationName');
+const modalStationInfo = document.getElementById('modalStationInfo');
+const modalRecordsList = document.getElementById('modalRecordsList');
+const recordForm = document.getElementById('recordForm');
+
+let activeStationId = null;
+let lastLoadedRecords = [];
+let editingRecordId = null;
+
+function formatDate(iso){
+  try{ return new Date(iso).toLocaleString(); } catch(e){ return iso; }
+}
+
+function openStationModal(id){
+  activeStationId = id;
+  const st = stations.find(s=>s.id===id);
+  if (!st) return alert('Station not found');
+  modalStationName.textContent = st.name;
+  modalStationInfo.innerHTML = `<strong>Location:</strong> ${escape(st.location)} — <strong>Contact:</strong> ${escape(st.contact)}<br/><strong>Type:</strong> ${escape(st.type)} — <strong>Batteries:</strong> ${st.batteryCount}`;
+  // reset list and load records
+  modalRecordsList.innerHTML = '<em>Loading records...</em>';
+  stationModal.classList.remove('hidden');
+  // default the date field to today
+  try{ const d = new Date(); const iso = d.toISOString().slice(0,10); document.getElementById('recDate').value = iso; } catch(e){}
+  loadStationRecords(id);
+}
+
+function closeStationModal(){
+  stationModal.classList.add('hidden');
+  activeStationId = null;
+  modalRecordsList.innerHTML = '';
+}
+
+closeStationModalBtn && closeStationModalBtn.addEventListener('click', closeStationModal);
+
+async function loadStationRecords(stationId){
+  try{
+    const res = await apiFetch(`/api/stations/${stationId}/records`);
+    if (!res.ok) { modalRecordsList.innerHTML = '<div class="muted">No records</div>'; return; }
+    const j = await res.json();
+    const recs = j.records || [];
+    lastLoadedRecords = recs.slice();
+    if (recs.length === 0) { modalRecordsList.innerHTML = '<div class="muted">No records</div>'; return; }
+    modalRecordsList.innerHTML = '';
+    recs.forEach(r=>{
+      const div = document.createElement('div');
+      div.className = 'record-item';
+      const info = document.createElement('div');
+      info.className = 'record-info';
+      info.innerHTML = `<strong>${escape(r.date)}</strong> — Start: ${r.startOfDay}, Given: ${r.givenOut}, Remaining: ${r.remaining}, Repair: ${r.needRepair}, Damaged: ${r.damaged}`;
+      const notes = document.createElement('div'); notes.className = 'muted'; notes.textContent = r.notes || '';
+      const meta = document.createElement('div'); meta.className = 'muted'; meta.textContent = formatDate(r.createdAt) + (r.updatedAt ? (' • Updated: ' + formatDate(r.updatedAt)) : '');
+      const actions = document.createElement('div'); actions.className = 'record-actions';
+      const editBtn = document.createElement('button'); editBtn.className = 'btn'; editBtn.textContent = 'Edit';
+      const delBtn = document.createElement('button'); delBtn.className = 'btn danger'; delBtn.textContent = 'Delete';
+      editBtn.addEventListener('click', ()=> startEditRecord(r));
+      delBtn.addEventListener('click', ()=> deleteRecord(r.id));
+      actions.appendChild(editBtn); actions.appendChild(delBtn);
+      div.appendChild(info); div.appendChild(notes); div.appendChild(meta); div.appendChild(actions);
+      modalRecordsList.appendChild(div);
+    });
+  } catch(e){ modalRecordsList.innerHTML = '<div class="muted">Failed to load records</div>'; }
+}
+
+recordForm && recordForm.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  if (!activeStationId) return alert('No station selected');
+  const payload = {
+    date: document.getElementById('recDate').value,
+    startOfDay: Number(document.getElementById('recStart').value)||0,
+    givenOut: Number(document.getElementById('recGiven').value)||0,
+    remaining: Number(document.getElementById('recRemaining').value)||0,
+    needRepair: Number(document.getElementById('recRepair').value)||0,
+    damaged: Number(document.getElementById('recDamaged').value)||0,
+    notes: document.getElementById('recNotes').value || ''
+  };
+  try{
+    const submitBtn = recordForm.querySelector('button[type="submit"]');
+    // If we are editing an existing record, send PUT
+    if (editingRecordId){
+      const res = await apiFetch(`/api/stations/${activeStationId}/records/${editingRecordId}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if (!res.ok){ const body = await res.text().catch(()=>null); throw new Error(body || 'Update failed'); }
+      showBanner('Record updated', 'info');
+      editingRecordId = null;
+      if (submitBtn) submitBtn.textContent = 'Save Record';
+      recordForm.reset();
+      await loadStationRecords(activeStationId);
+      return;
+    }
+
+    // Check for duplicate date in loaded records
+    const dup = lastLoadedRecords.find(r => r.date === payload.date);
+    if (dup){
+      if (!confirm('A record for this date already exists. Overwrite it?')) return;
+      // perform update instead of create
+      const res = await apiFetch(`/api/stations/${activeStationId}/records/${dup.id}`, { method: 'PUT', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      if (!res.ok){ const body = await res.text().catch(()=>null); throw new Error(body || 'Update failed'); }
+      showBanner('Record updated', 'info');
+      recordForm.reset();
+      await loadStationRecords(activeStationId);
+      return;
+    }
+
+    // otherwise create new
+    const res = await apiFetch(`/api/stations/${activeStationId}/records`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+    if (!res.ok){ const body = await res.text().catch(()=>null); throw new Error(body || 'Save failed'); }
+    await loadStationRecords(activeStationId);
+    showBanner('Record saved', 'info');
+    recordForm.reset();
+  } catch(err){ showBanner('Failed to save record: ' + (err.message||err), 'error'); }
+});
+
+function startEditRecord(record){
+  try{
+    editingRecordId = record.id;
+    document.getElementById('recDate').value = record.date;
+    document.getElementById('recStart').value = record.startOfDay||0;
+    document.getElementById('recGiven').value = record.givenOut||0;
+    document.getElementById('recRemaining').value = record.remaining||0;
+    document.getElementById('recRepair').value = record.needRepair||0;
+    document.getElementById('recDamaged').value = record.damaged||0;
+    document.getElementById('recNotes').value = record.notes||'';
+    const submitBtn = recordForm.querySelector('button[type="submit"]');
+    if (submitBtn) submitBtn.textContent = 'Update Record';
+    showBanner('Editing record — make changes and Save', 'info');
+  } catch(e){ showBanner('Failed to start edit', 'error'); }
+}
+
+async function deleteRecord(rid){
+  if (!confirm('Delete this record?')) return;
+  try{
+    const res = await apiFetch(`/api/stations/${activeStationId}/records/${rid}`, { method: 'DELETE' });
+    if (!res.ok){ const body = await res.text().catch(()=>null); throw new Error(body || 'Delete failed'); }
+    showBanner('Record deleted', 'info');
+    // refresh list
+    await loadStationRecords(activeStationId);
+  } catch(e){ showBanner('Failed to delete record: ' + (e.message||e), 'error'); }
+}
 

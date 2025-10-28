@@ -141,6 +141,32 @@
     </main>
   </div>
 
+  <!-- Station detail modal -->
+  <div id="stationModal" class="modal hidden">
+    <div class="modal-card">
+      <button id="closeStationModal" class="modal-close">&times;</button>
+      <h3 id="modalStationName">Station</h3>
+      <div id="modalStationInfo" class="modal-info"></div>
+
+      <h4>Daily Records</h4>
+      <div id="modalRecordsList" class="records-list"></div>
+
+      <h4>Add / Update Today's Record</h4>
+      <form id="recordForm">
+        <label>Date <input id="recDate" type="date" required /></label>
+        <label>Start of day <input id="recStart" type="number" min="0" value="0" required /></label>
+        <label>Given out <input id="recGiven" type="number" min="0" value="0" required /></label>
+        <label>Remaining <input id="recRemaining" type="number" min="0" value="0" required /></label>
+        <label>Need repair <input id="recRepair" type="number" min="0" value="0" /></label>
+        <label>Damaged <input id="recDamaged" type="number" min="0" value="0" /></label>
+        <label>Notes <input id="recNotes" type="text" placeholder="Optional notes" /></label>
+        <div class="form-actions">
+          <button type="submit" class="btn primary">Save Record</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Footer note (small) -->
   <footer class="app-footer">
     <small class="muted">StationSync — Prototype by [Your Name] • Data stored locally in browser</small>
