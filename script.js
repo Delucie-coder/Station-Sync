@@ -29,14 +29,64 @@ function isAuthenticated(){
   return currentUser !== null;
 }
 
-// Base URL for backend API when frontend is served from Live Server on port 5500
-const API_BASE = 'http://localhost:3000';
+// Base URL for backend API — default to the current origin so the frontend
+// will call the same host/port that served the page (works when your
+// backend and frontend are on the same origin, e.g., port 5500).
+let API_BASE = window.location.origin;
+const FALLBACK_API = 'http://localhost:3000';
+
+// apiFetch: try primary origin first, fall back to FALLBACK_API only on
+// network-level failures (e.g. connection refused / failed to fetch).
+async function apiFetch(path, options){
+  const primaryUrl = API_BASE + path;
+  try{
+    const res = await fetch(primaryUrl, options);
+    // If primary responds with 404/405 it often means there's no API on that origin
+    // (for example Live Server serving static files). In that case try fallback.
+    if (res && (res.status === 404 || res.status === 405)){
+      console.warn('Primary API returned', res.status, '– trying fallback');
+      try{ showBanner('Primary API returned ' + res.status + ', trying fallback', 'warn'); } catch(e){}
+      const fallbackUrl = FALLBACK_API + path;
+      return await fetch(fallbackUrl, options);
+    }
+    return res;
+  } catch(primaryErr){
+    console.warn('Primary API fetch failed, trying fallback URL:', primaryErr);
+    try{ showBanner('Primary API unreachable, using fallback API', 'warn'); } catch(e){}
+    const fallbackUrl = FALLBACK_API + path;
+    return await fetch(fallbackUrl, options);
+  }
+}
+
+// small on-screen banner for notices
+function showBanner(message, type='info'){
+  try{
+    let b = document.getElementById('ss-banner');
+    if (!b){
+      b = document.createElement('div');
+      b.id = 'ss-banner';
+      b.style.position = 'fixed';
+      b.style.top = '12px';
+      b.style.right = '12px';
+      b.style.zIndex = 9999;
+      b.style.padding = '8px 12px';
+      b.style.borderRadius = '6px';
+      b.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+      b.style.fontFamily = 'system-ui, Arial, sans-serif';
+      document.body.appendChild(b);
+    }
+    b.textContent = message;
+    b.style.background = type === 'error' ? '#fee2e2' : (type === 'warn' ? '#fef3c7' : '#ecfeff');
+    b.style.color = '#111827';
+    setTimeout(() => { try{ b.remove(); }catch(e){} }, 4000);
+  } catch(e){}
+}
 
 async function checkSession(){
   try{
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
-    const res = await fetch(API_BASE + '/api/session', { headers });
+  const res = await apiFetch('/api/session', { headers });
     if (!res.ok) return false;
     const j = await res.json();
     if (j.user){
@@ -61,34 +111,76 @@ async function checkSession(){
   } catch(e){ currentUser = null; lockUI(); return false; }
 }
 
+// probePrimary: check whether the primary origin actually exposes the API.
+// If primary responds with 404/405 or the request fails, switch to fallback permanently.
+async function probePrimary(){
+  try{
+    const url = window.location.origin + '/api/session';
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok && (res.status === 404 || res.status === 405)){
+      API_BASE = FALLBACK_API;
+      showBanner('Primary origin does not host API — using fallback API', 'warn');
+      return false;
+    }
+    return true;
+  } catch(e){
+    API_BASE = FALLBACK_API;
+    showBanner('Primary origin unreachable — using fallback API', 'warn');
+    return false;
+  }
+}
+
 async function serverLogin(username, password, remember){
-  const res = await fetch(API_BASE + '/api/login', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ username, password, remember })
-  });
-  if (!res.ok){ const err = await res.json().catch(()=>({message:'Login failed'})); throw new Error(err.message || 'Login failed'); }
-  const j = await res.json();
-  if (j.token) try { localStorage.setItem(TOKEN_KEY, j.token); } catch(e){}
-  currentUser = j.user; showUser(currentUser);
-  try { localStorage.setItem(BROADCAST_KEY, 'login:' + Date.now()); } catch(e){}
-  return true;
+  try{
+    const res = await apiFetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ username, password, remember })
+    });
+    if (!res.ok){
+      let body = await res.text().catch(()=>null);
+      try{ body = JSON.parse(body); } catch(e){}
+      const msg = (body && body.message) ? body.message : (`Login failed (status ${res.status})`);
+      showBanner(msg, 'error');
+      throw new Error(msg);
+    }
+    const j = await res.json();
+    if (j.token) try { localStorage.setItem(TOKEN_KEY, j.token); } catch(e){}
+    currentUser = j.user; showUser(currentUser);
+    try { localStorage.setItem(BROADCAST_KEY, 'login:' + Date.now()); } catch(e){}
+    return true;
+  } catch(err){
+    // network or other error
+    showBanner('Login request failed: ' + (err.message || err), 'error');
+    throw err;
+  }
 }
 
 async function serverRegister(username, password, remember){
-  const res = await fetch(API_BASE + '/api/register', {
-    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password, remember })
-  });
-  if (!res.ok){ const err = await res.json().catch(()=>({message:'Register failed'})); throw new Error(err.message || 'Register failed'); }
-  const j = await res.json();
-  if (j.token) try { localStorage.setItem(TOKEN_KEY, j.token); } catch(e){}
-  currentUser = j.user; showUser(currentUser);
-  try { localStorage.setItem(BROADCAST_KEY, 'login:' + Date.now()); } catch(e){}
-  return true;
+  try{
+    const res = await apiFetch('/api/register', {
+      method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username, password, remember })
+    });
+    if (!res.ok){
+      let body = await res.text().catch(()=>null);
+      try{ body = JSON.parse(body); } catch(e){}
+      const msg = (body && body.message) ? body.message : (`Register failed (status ${res.status})`);
+      showBanner(msg, 'error');
+      throw new Error(msg);
+    }
+    const j = await res.json();
+    if (j.token) try { localStorage.setItem(TOKEN_KEY, j.token); } catch(e){}
+    currentUser = j.user; showUser(currentUser);
+    try { localStorage.setItem(BROADCAST_KEY, 'login:' + Date.now()); } catch(e){}
+    return true;
+  } catch(err){
+    showBanner('Registration request failed: ' + (err.message || err), 'error');
+    throw err;
+  }
 }
 
 async function serverLogout(){
-  try{ await fetch(API_BASE + '/api/logout',{ method:'POST' }); } catch(e){}
+  try{ await apiFetch('/api/logout',{ method:'POST' }); } catch(e){}
   try{ localStorage.removeItem(TOKEN_KEY); } catch(e){}
   currentUser = null; clearAuth();
   try { localStorage.setItem(BROADCAST_KEY, 'logout:' + Date.now()); } catch(e){}
@@ -289,14 +381,14 @@ loginForm.addEventListener('submit', async (e) => {
 async function tryAutoLogin(username){
   try{
     // first fetch list of users to confirm existence
-  const listRes = await fetch(API_BASE + '/api/users');
+  const listRes = await apiFetch('/api/users');
     if (!listRes.ok) return false;
     const lj = await listRes.json();
     if (!lj.users || !Array.isArray(lj.users)) return false;
     if (lj.users.indexOf(username) === -1) return false;
 
     // attempt auto-login
-    const res = await fetch(API_BASE + '/api/auto-login', {
+    const res = await apiFetch('/api/auto-login', {
       method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username })
     });
     if (!res.ok) return false;
@@ -491,8 +583,9 @@ function renderLocations(){
 
 // ---------- Init ----------
 function init(){
-  // check server session on init
-  checkSession().then(ok => {
+  // probe primary origin for API then check server session on init
+  probePrimary().then(()=>{
+    checkSession().then(ok => {
     if (ok){
       loginScreen.classList.add('hidden');
       appEl.classList.remove('hidden');
@@ -502,6 +595,7 @@ function init(){
       appEl.classList.add('hidden');
       lockUI();
     }
+    });
   });
 
   // expose a shorthand for document.getElementById
