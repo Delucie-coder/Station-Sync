@@ -35,29 +35,16 @@
         </label>
         <div class="form-actions">
           <button type="submit" class="btn primary">Login</button>
-          <button type="button" id="showRegister" class="btn">Register</button>
         </div>
         <div style="margin-top:8px">
           <button id="resumeSessionBtn" class="btn" style="display:none">Continue session</button>
         </div>
+        <!-- guest registration removed from login screen -->
       </form>
 
       <small class="muted">(Prototype — accepts any non-empty credentials)</small>
     </div>
-    <!-- Register form (hidden by default) -->
-    <div class="login-card hidden" id="registerCard" style="margin-top:14px">
-      <h2>Create account</h2>
-      <form id="registerForm" autocomplete="off">
-        <label><input id="regUser" type="text" placeholder="Choose a username" required /></label>
-        <label><input id="regPass" type="password" placeholder="Password" required /></label>
-        <label><input id="regPass2" type="password" placeholder="Confirm password" required /></label>
-        <div class="form-actions">
-          <button type="submit" class="btn primary">Create account</button>
-          <button type="button" id="showLogin" class="btn">Back to Login</button>
-        </div>
-      </form>
-      <small class="muted">Passwords are hashed locally (demo only).</small>
-    </div>
+    <!-- Registration UI removed as requested -->
   </div>
 
   <!-- ===== Main App (hidden until login) ===== -->
