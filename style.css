@@ -36,6 +36,31 @@ a{color:var(--accent)}
 .app{display:flex;height:100vh;gap:18px;padding:18px;background:transparent}
 .sidebar{width:260px;background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.02));border-radius:var(--radius);box-shadow:var(--shadow);display:flex;flex-direction:column;padding:16px}
 .brand{display:flex;align-items:center;gap:12px;margin-bottom:8px}
+.brand img#brandLogo{width:44px;height:44px;object-fit:contain;border-radius:8px;background:linear-gradient(90deg,var(--accent),#60a5fa);padding:6px}
+
+/* Logo specific styles */
+.login-logo{
+  display:block;
+  margin:0 auto 12px auto;
+  width:200px;
+  max-width:90%;
+  height:auto;
+  filter: drop-shadow(0 6px 16px rgba(6,24,50,0.35));
+}
+
+.dashboard-mark{
+  width:48px;
+  height:48px;
+  object-fit:contain;
+  display:inline-block;
+  vertical-align:middle;
+  margin-right:10px;
+  border-radius:8px;
+}
+@media (max-width:900px){
+  .dashboard-mark{ width:40px; height:40px; }
+  .login-logo{ width:160px; }
+}
 .title{font-size:1.2rem;font-weight:700}
 .subtitle{font-size:0.85rem;color:var(--muted)}
 .nav{display:flex;flex-direction:column;gap:8px;margin-top:12px}
