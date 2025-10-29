@@ -313,6 +313,19 @@ function highlightStationRow(stationId){
     found.scrollIntoView({ behavior:'smooth', block:'center' });
     setTimeout(()=> found.classList.remove('highlight-row'), 2500);
   } catch(e){}
+  // wire migration button (if present)
+  try{
+    const migBtn = $('migrateBtn'); if (migBtn){ migBtn.addEventListener('click', async ()=>{
+      if (!confirm('Migrate JSON data to SQLite on the server? This is one-time and requires the server to have SQLite support installed.')) return;
+      const statusEl = $('migrateStatus'); if (statusEl) statusEl.textContent = 'Migrating...';
+      const token = localStorage.getItem(TOKEN_KEY); const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+      try{
+        const res = await apiFetch('/api/migrate-to-sqlite', { method:'POST', headers });
+        if (!res.ok) { const txt = await res.text().catch(()=>res.status); if (statusEl) statusEl.textContent = 'Migration failed'; showBanner('Migration failed: ' + txt, 'error'); return; }
+        const j = await res.json(); if (statusEl) statusEl.textContent = 'Migration complete'; showBanner('Migration complete', 'info');
+      } catch(e){ if (statusEl) statusEl.textContent = 'Migration error'; showBanner('Migration error: ' + (e.message||e), 'error'); }
+    }); }
+  } catch(e){}
 }
 
 // confirm modal
@@ -330,6 +343,53 @@ function openConfirmModal(title, html){
     } catch(e){ resolve(true); }
   });
 }
+
+// ----- Backups / Restore UI -----
+function showBackupsModal(){
+  const modal = $('backupsModal'); if (!modal) return;
+  modal.classList.remove('hidden');
+  const status = $('restoreStatus'); if (status) status.textContent = '';
+  loadBackupsList();
+}
+
+function closeBackupsModal(){
+  const modal = $('backupsModal'); if (!modal) return; modal.classList.add('hidden');
+}
+
+async function loadBackupsList(){
+  const listEl = $('backupsList'); const status = $('restoreStatus');
+  if (!listEl) return;
+  listEl.innerHTML = 'Loading...';
+  try{
+    const token = localStorage.getItem(TOKEN_KEY); const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+    const res = await apiFetch('/api/list-backups', { headers });
+    if (!res.ok){ listEl.innerHTML = '<div class="muted">Failed to list backups</div>'; return; }
+    const j = await res.json(); const files = j.backups || [];
+    if (!files.length){ listEl.innerHTML = '<div class="muted">No backups available</div>'; return; }
+    listEl.innerHTML = '';
+    files.forEach(f => {
+      const row = document.createElement('div'); row.className = 'backup-row';
+      row.style.display = 'flex'; row.style.justifyContent = 'space-between'; row.style.alignItems = 'center'; row.style.padding = '6px 8px'; row.style.borderBottom = '1px solid #eee';
+      const name = document.createElement('div'); name.textContent = f; name.style.fontFamily='monospace';
+      const actions = document.createElement('div');
+      const restoreBtn = document.createElement('button'); restoreBtn.className='btn danger'; restoreBtn.textContent='Restore';
+      restoreBtn.addEventListener('click', async ()=>{
+        const ok = await openConfirmModal('Restore backup', `<div>Are you sure you want to restore <strong>${escapeHtml(f)}</strong>? This will overwrite server JSON data.</div>`);
+        if (!ok) return;
+        try{
+          if (status) status.textContent = 'Restoring...';
+          const rres = await apiFetch('/api/restore-from-backup', { method:'POST', headers: Object.assign({'Content-Type':'application/json'}, headers), body: JSON.stringify({ file: f }) });
+          if (!rres.ok){ const t = await rres.text().catch(()=>rres.status); if (status) status.textContent = 'Restore failed'; showBanner('Restore failed: ' + t, 'error'); return; }
+          const jr = await rres.json(); if (status) status.textContent = 'Restore complete'; showBanner('Restore complete — reload to apply', 'info', { actionText:'Reload', onClick:()=> location.reload() });
+        } catch(e){ if (status) status.textContent = 'Restore error'; showBanner('Restore error: ' + (e.message||e), 'error'); }
+      });
+      actions.appendChild(restoreBtn);
+      row.appendChild(name); row.appendChild(actions);
+      listEl.appendChild(row);
+    });
+  } catch(e){ listEl.innerHTML = '<div class="muted">Error loading backups</div>'; }
+}
+
 
 // ----- Station form submit -----
 if (stationForm) stationForm.addEventListener('submit', async (e)=>{
@@ -421,16 +481,46 @@ function openStationModal(id){
   modalStationInfo.innerHTML = `<strong>Location:</strong> ${escapeHtml(st.location)} — <strong>Contact:</strong> ${escapeHtml(st.contact)}<br/><strong>Type:</strong> ${escapeHtml(st.type)} — <strong>Batteries:</strong> ${st.batteryCount}`;
   modalRecordsList.innerHTML = '<em>Loading records...</em>';
   stationModal.classList.remove('hidden');
-  try{ $('recDate').value = new Date().toISOString().slice(0,10); }catch(e){}
-  loadStationRecords(id);
+  try{
+    const today = new Date(); const iso = today.toISOString().slice(0,10);
+    const recDateEl = $('recDate'); const fromEl = $('recFrom'); const toEl = $('recTo');
+    if (recDateEl) recDateEl.value = iso;
+    if (toEl) toEl.value = iso;
+    if (fromEl){ const past = new Date(); past.setDate(past.getDate() - 30); fromEl.value = past.toISOString().slice(0,10); }
+    // wire quick range buttons (replace handlers)
+    const b30 = $('range30'); const bm = $('rangeMonth'); const by = $('rangeYear');
+    if (b30) b30.onclick = ()=>{ const to = new Date(); const from = new Date(); from.setDate(from.getDate()-30); $('recFrom').value = from.toISOString().slice(0,10); $('recTo').value = to.toISOString().slice(0,10); loadStationRecords(id, $('recFrom').value, $('recTo').value); };
+    if (bm) bm.onclick = ()=>{ const now = new Date(); const from = new Date(now.getFullYear(), now.getMonth(), 1); $('recFrom').value = from.toISOString().slice(0,10); $('recTo').value = new Date().toISOString().slice(0,10); loadStationRecords(id, $('recFrom').value, $('recTo').value); };
+    if (by) by.onclick = ()=>{ const now = new Date(); const from = new Date(now.getFullYear(), 0, 1); $('recFrom').value = from.toISOString().slice(0,10); $('recTo').value = new Date().toISOString().slice(0,10); loadStationRecords(id, $('recFrom').value, $('recTo').value); };
+    // add Export CSV button to modal controls (if not present)
+    try{
+      if (!$('exportCsvBtn')){
+        const ctrlWrap = b30 && b30.parentElement ? b30.parentElement : null;
+        const expBtn = document.createElement('button'); expBtn.id = 'exportCsvBtn'; expBtn.className = 'btn'; expBtn.textContent = 'Export CSV';
+        expBtn.style.marginLeft = '8px';
+        expBtn.addEventListener('click', ()=> exportCsvForActiveStation());
+        if (ctrlWrap) ctrlWrap.appendChild(expBtn);
+      }
+    } catch(e){}
+    if (fromEl) fromEl.onchange = ()=> loadStationRecords(id, fromEl.value, toEl ? toEl.value : '');
+    if (toEl) toEl.onchange = ()=> loadStationRecords(id, fromEl ? fromEl.value : '', toEl.value);
+  } catch(e){}
+  const f = $('recFrom') && $('recFrom').value; const t = $('recTo') && $('recTo').value;
+  loadStationRecords(id, f, t);
+  
 }
 function closeStationModal(){ stationModal.classList.add('hidden'); activeStationId = null; modalRecordsList.innerHTML=''; editingRecordId=null; recordForm && recordForm.reset(); }
 
 closeStationModalBtn && closeStationModalBtn.addEventListener('click', closeStationModal);
 
-async function loadStationRecords(stationId){
+async function loadStationRecords(stationId, from, to){
   try{
-    const res = await apiFetch(`/api/stations/${stationId}/records`);
+    let url = `/api/stations/${stationId}/records`;
+    const params = [];
+    if (from) params.push('from=' + encodeURIComponent(from));
+    if (to) params.push('to=' + encodeURIComponent(to));
+    if (params.length) url += '?' + params.join('&');
+    const res = await apiFetch(url);
     if (!res.ok){ modalRecordsList.innerHTML = '<div class="muted">No records</div>'; return; }
     const j = await res.json(); const recs = j.records || []; lastLoadedRecords = recs.slice();
     if (recs.length === 0) { modalRecordsList.innerHTML = '<div class="muted">No records</div>'; return; }
@@ -439,8 +529,8 @@ async function loadStationRecords(stationId){
       const div = document.createElement('div'); div.className='record-item';
       const info = document.createElement('div'); info.className='record-info';
       info.innerHTML = `<strong>${escapeHtml(r.date)}</strong> — Start: ${r.startOfDay}, Given: ${r.givenOut}, Remaining: ${r.remaining}, Repair: ${r.needRepair}, Damaged: ${r.damaged}`;
-      const notes = document.createElement('div'); notes.className='muted'; notes.textContent = r.notes || '';
-      const meta = document.createElement('div'); meta.className='muted'; meta.textContent = formatDate(r.createdAt) + (r.updatedAt ? (' • Updated: ' + formatDate(r.updatedAt)) : '');
+      const notes = document.createElement('div'); notes.className = 'muted'; notes.textContent = r.notes || '';
+      const meta = document.createElement('div'); meta.className = 'muted'; meta.textContent = formatDate(r.createdAt) + (r.updatedAt ? (' • Updated: ' + formatDate(r.updatedAt)) : '');
       const actions = document.createElement('div'); actions.className='record-actions';
       const editBtn = document.createElement('button'); editBtn.className='btn'; editBtn.textContent='Edit';
       const delBtn = document.createElement('button'); delBtn.className='btn danger'; delBtn.textContent='Delete';
@@ -495,6 +585,102 @@ async function deleteRecord(rid){
     if (!res.ok) throw new Error('Delete failed');
     showBanner('Record deleted', 'info'); await loadStationRecords(activeStationId);
   } catch(e){ showBanner('Failed to delete record: ' + (e.message||e), 'error'); }
+}
+
+// ----- Maintenance panel and reports -----
+async function renderMaintenancePanel(){
+  const el = $('maintenanceList'); if (!el) return;
+  el.textContent = 'Loading...';
+  try{
+    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+    const res = await apiFetch('/api/maintenance', { headers });
+    if (!res.ok) { el.innerHTML = '<div class="muted">Failed to load maintenance</div>'; return; }
+    const j = await res.json(); const list = j.maintenance || [];
+    if (!list.length){ el.innerHTML = '<div class="muted">No maintenance items</div>'; return; }
+    // build table
+    const table = document.createElement('table'); table.className='table';
+    const thead = document.createElement('thead'); thead.innerHTML = '<tr><th>Station</th><th>Need Repair</th><th>Damaged</th><th>Last Record</th><th>Action</th></tr>';
+    const tbody = document.createElement('tbody');
+    list.forEach(item=>{
+      const tr = document.createElement('tr');
+      const st = item.station || { id: item.stationId, name: item.stationId };
+      const last = item.lastRecord ? item.lastRecord.date : '';
+      tr.innerHTML = `<td>${escapeHtml(st.name)} (${escapeHtml(st.id)})</td><td>${Number(item.needRepair)||0}</td><td>${Number(item.damaged)||0}</td><td>${escapeHtml(last)}</td><td><button class="btn" data-sid="${escapeHtml(st.id)}">View</button></td>`;
+      const btn = tr.querySelector('button'); if (btn) btn.addEventListener('click', ()=>{ setActiveNav('dashboard'); openStationModal(st.id); });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(thead); table.appendChild(tbody);
+    el.innerHTML = ''; el.appendChild(table);
+  } catch(e){ el.innerHTML = '<div class="muted">Error loading maintenance</div>'; }
+}
+
+let aggregateChart = null;
+async function runReport(){
+  const period = $('reportPeriod') ? $('reportPeriod').value : 'month';
+  const from = $('reportFrom') ? $('reportFrom').value : '';
+  const to = $('reportTo') ? $('reportTo').value : '';
+  const headers = {};
+  const token = localStorage.getItem(TOKEN_KEY); if (token) headers['Authorization'] = 'Bearer ' + token;
+  try{
+    const q = [];
+    if (period) q.push('period=' + encodeURIComponent(period));
+    if (from) q.push('from=' + encodeURIComponent(from));
+    if (to) q.push('to=' + encodeURIComponent(to));
+    const url = '/api/reports/aggregate' + (q.length ? ('?' + q.join('&')) : '');
+    const res = await apiFetch(url, { headers });
+    if (!res.ok) { showBanner('Failed to load report', 'error'); return; }
+    const j = await res.json(); const data = j.data || [];
+    const labels = data.map(d => d.period);
+    const given = data.map(d => Number(d.givenOut)||0);
+    const remaining = data.map(d => Number(d.remaining)||0);
+    const ctx = $('reportChart') && $('reportChart').getContext ? $('reportChart').getContext('2d') : null;
+    if (!ctx) return;
+    if (aggregateChart){
+      aggregateChart.data.labels = labels;
+      aggregateChart.data.datasets[0].data = given;
+      aggregateChart.data.datasets[1].data = remaining;
+      aggregateChart.update();
+      return;
+    }
+    aggregateChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [
+          { label: 'Given Out', data: given, backgroundColor: '#60a5fa' },
+          { label: 'Remaining', data: remaining, backgroundColor: '#06b6b4' }
+        ]
+      },
+      options: { responsive:true, interaction:{mode:'index'}, scales:{ x:{ stacked:false }, y:{ stacked:false } } }
+    });
+  } catch(e){ showBanner('Error generating report: ' + (e.message||e), 'error'); }
+}
+
+async function exportCsvForActiveStation(){
+  if (!activeStationId) return alert('No station selected');
+  const from = $('recFrom') ? $('recFrom').value : '';
+  const to = $('recTo') ? $('recTo').value : '';
+  const params = [];
+  if (from) params.push('from=' + encodeURIComponent(from));
+  if (to) params.push('to=' + encodeURIComponent(to));
+  const url = '/api/stations/' + encodeURIComponent(activeStationId) + '/records' + (params.length ? ('?' + params.join('&')) : '');
+  try{
+    const token = localStorage.getItem(TOKEN_KEY); const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+    const res = await apiFetch(url, { headers }); if (!res.ok) throw new Error('Failed to fetch records');
+    const j = await res.json(); const recs = j.records || [];
+    if (!recs.length) return alert('No records to export for selected range');
+    const cols = ['date','startOfDay','givenOut','remaining','needRepair','damaged','notes'];
+    const rows = recs.map(r => cols.map(c => '"' + String(r[c] || '').replace(/"/g,'""') + '"').join(','));
+    const csv = cols.join(',') + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const urlb = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = urlb;
+    const name = (modalStationName && modalStationName.textContent ? modalStationName.textContent.replace(/\s+/g,'_') : activeStationId);
+    const fname = `${name}_${from || 'all'}_${to || 'all'}.csv`;
+    a.download = fname; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(urlb);
+    showBanner('CSV exported', 'info');
+  } catch(e){ showBanner('Failed to export CSV: ' + (e.message||e), 'error'); }
 }
 
 // ----- Sync guest stations (kept for compatibility) -----
@@ -620,6 +806,16 @@ function init(){
     ensureSimControls();
     // initial chart & render
     updateChart(); render();
+    // load maintenance panel and wire reports
+    try{ renderMaintenancePanel();
+      const runBtn = $('runReport'); if (runBtn) runBtn.addEventListener('click', runReport);
+      // default report range: last 6 months
+      const toEl = $('reportTo'), fromEl = $('reportFrom');
+      if (toEl){ const now = new Date(); toEl.value = now.toISOString().slice(0,10); }
+      if (fromEl){ const past = new Date(); past.setMonth(past.getMonth()-6); fromEl.value = past.toISOString().slice(0,10); }
+      // run initial report
+      setTimeout(()=> runReport(), 200);
+    } catch(e){}
     // if stations is empty add demo data (only once)
     if (!stations || stations.length === 0){
       stations = [
@@ -631,6 +827,13 @@ function init(){
       saveData(stations);
       render();
     }
+    // wire backups UI (if present)
+    try{
+      const showBackupsBtn = $('showBackupsBtn'); if (showBackupsBtn) showBackupsBtn.addEventListener('click', showBackupsModal);
+      const closeBackupsModalBtn = $('closeBackupsModal'); if (closeBackupsModalBtn) closeBackupsModalBtn.addEventListener('click', closeBackupsModal);
+      const closeBackupsBtn = $('closeBackupsBtn'); if (closeBackupsBtn) closeBackupsBtn.addEventListener('click', closeBackupsModal);
+      const refreshBackupsBtn = $('refreshBackupsBtn'); if (refreshBackupsBtn) refreshBackupsBtn.addEventListener('click', loadBackupsList);
+    } catch(e){ console.warn('Backups UI not available', e); }
   }));
 }
 

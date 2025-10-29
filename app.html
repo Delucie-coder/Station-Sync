@@ -86,6 +86,29 @@
             </table>
           </div>
         </div>
+        
+        <!-- Maintenance panel -->
+        <div id="maintenancePanel" class="panel" style="margin-top:12px">
+          <h3>Maintenance (need repair / damaged)</h3>
+          <div id="maintenanceList">Loading...</div>
+        </div>
+
+        <!-- Aggregated reports panel -->
+        <div id="reportsPanel" class="panel" style="margin-top:12px">
+          <h3>Activity Reports</h3>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+            <label>Period
+              <select id="reportPeriod">
+                <option value="month" selected>Monthly</option>
+                <option value="year">Yearly</option>
+              </select>
+            </label>
+            <label>From <input id="reportFrom" type="date" /></label>
+            <label>To <input id="reportTo" type="date" /></label>
+            <button id="runReport" class="btn">Run</button>
+          </div>
+          <canvas id="reportChart" height="140"></canvas>
+        </div>
       </section>
 
       <section id="register" class="page hidden">
@@ -127,6 +150,18 @@
         </div>
       </section>
 
+          <!-- Storage / Migration panel (placed under Register as requested) -->
+          <section id="storage" class="page hidden">
+            <div class="panel">
+              <h3>Storage & Migration</h3>
+              <p class="muted">Migrate existing JSON data into SQLite for more reliable storage.</p>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button id="migrateBtn" class="btn">Migrate to SQLite</button>
+                <div id="migrateStatus" class="muted"></div>
+              </div>
+            </div>
+          </section>
+
       <section id="analytics" class="page hidden">
         <div class="panel">
           <h3>IoT Status Overview</h3>
@@ -141,7 +176,7 @@
     </main>
   </div>
 
-  <!-- Station detail modal -->
+  <!-- Station detail modal (with date range controls) -->
   <div id="stationModal" class="modal hidden">
     <div class="modal-card">
       <button id="closeStationModal" class="modal-close">&times;</button>
@@ -149,6 +184,19 @@
       <div id="modalStationInfo" class="modal-info"></div>
 
       <h4>Daily Records</h4>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
+        <div>
+          <label style="font-size:0.85rem">From <input id="recFrom" type="date" /></label>
+        </div>
+        <div>
+          <label style="font-size:0.85rem">To <input id="recTo" type="date" /></label>
+        </div>
+        <div style="margin-left:auto;display:flex;gap:6px">
+          <button id="range30" class="btn">Last 30d</button>
+          <button id="rangeMonth" class="btn">This month</button>
+          <button id="rangeYear" class="btn">This year</button>
+        </div>
+      </div>
       <div id="modalRecordsList" class="records-list"></div>
 
       <h4>Add / Update Today's Record</h4>
