@@ -17,6 +17,8 @@
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:linear-gradient(180deg,var(--bg-start) 0%, var(--bg-end) 65%);color: #eaf6ff}
+/* Utility hidden class used across the app to hide pages/modals */
+.hidden{display:none !important}
 a{color:var(--accent)}
 .muted{color:var(--muted);font-size:0.95rem}
 
