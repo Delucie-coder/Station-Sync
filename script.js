@@ -49,6 +49,18 @@ function showBanner(message, type='info', opts){
   } catch(e){ console.warn(e); }
 }
 
+// ----- API status UI -----
+function setApiStatus(isOk, message){
+  try{
+    const el = $('apiStatus'); const loginEl = $('loginApiStatus');
+    const text = message || (isOk ? 'API available' : 'API unreachable');
+    const cls = isOk ? 'api-status ok' : 'api-status bad';
+    const html = `<span>${escapeHtml(text)}</span><button id="apiRetryBtn" title="Retry">Retry</button>`;
+    if (el){ el.className = cls; el.innerHTML = html; const btn = $('apiRetryBtn'); if (btn) btn.addEventListener('click', async ()=>{ setApiStatus(false,'Retrying...'); await probePrimary(); await checkSession(); }); }
+    if (loginEl){ loginEl.className = cls; loginEl.innerHTML = html; const btn2 = loginEl.querySelector('#apiRetryBtn'); if (btn2) btn2.addEventListener('click', async ()=>{ setApiStatus(false,'Retrying...'); await probePrimary(); await checkSession(); }); }
+  } catch(e){ console.warn('setApiStatus error', e); }
+}
+
 // ----- API fetch with fallback -----
 async function apiFetch(path, options){
   const primary = API_BASE + path;
@@ -769,9 +781,16 @@ async function probePrimary(){
   try{
     const url = window.location.origin + '/api/session';
     const res = await fetch(url, { method:'GET' });
-    if (!res.ok && (res.status === 404 || res.status === 405)){ API_BASE = FALLBACK_API; showBanner('Primary origin does not host API — using fallback API','warn'); return false; }
+    if (!res.ok && (res.status === 404 || res.status === 405)){
+      API_BASE = FALLBACK_API; setApiStatus(false, 'Primary origin does not host API — using fallback'); showBanner('Primary origin does not host API — using fallback API','warn'); return false;
+    }
+    // primary OK
+    API_BASE = window.location.origin;
+    setApiStatus(true, 'API available at ' + window.location.origin);
     return true;
-  } catch(e){ API_BASE = FALLBACK_API; showBanner('Primary origin unreachable — using fallback API','warn'); return false; }
+  } catch(e){
+    API_BASE = FALLBACK_API; setApiStatus(false, 'Primary origin unreachable — using fallback'); showBanner('Primary origin unreachable — using fallback API','warn'); return false;
+  }
 }
 
 async function checkSession(){

@@ -4,10 +4,11 @@
   "description": "StationSync prototype server (Express) for auth and static hosting",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
     "migrate": "node scripts/migrate-to-sqlite.js",
     "smoke": "node scripts/smoke-tests.js",
     "restore": "node scripts/restore-from-backup.js"
+  },
   "dependencies": {
     "bcrypt": "^5.1.0",
     "better-sqlite3": "^12.4.1",

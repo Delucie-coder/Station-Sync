@@ -61,6 +61,14 @@ a{color:var(--accent)}
   .dashboard-mark{ width:40px; height:40px; }
   .login-logo{ width:160px; }
 }
+
+/* API status indicator */
+.api-status{
+  font-size:0.85rem;padding:6px 10px;border-radius:10px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:var(--muted);display:inline-flex;align-items:center;gap:8px
+}
+.api-status.ok{ background: linear-gradient(90deg, rgba(96,165,250,0.12), rgba(6,182,180,0.06)); color: #e6f8ff }
+.api-status.bad{ background: linear-gradient(90deg, rgba(255,107,136,0.06), rgba(255,182,107,0.04)); color: #fff2f3 }
+.api-status button{ background:transparent;border:0;color:var(--muted);cursor:pointer;padding:4px 6px;border-radius:6px }
 .title{font-size:1.2rem;font-weight:700}
 .subtitle{font-size:0.85rem;color:var(--muted)}
 .nav{display:flex;flex-direction:column;gap:8px;margin-top:12px}
