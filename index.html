@@ -95,14 +95,6 @@
             <div id="totalStations" class="card-value">0</div>
           </div>
           <div class="card">
-            <div class="card-title">Active Stations</div>
-            <div id="activeStations" class="card-value">0</div>
-          </div>
-          <div class="card">
-            <div class="card-title">Inactive Stations</div>
-            <div id="inactiveStations" class="card-value">0</div>
-          </div>
-          <div class="card">
             <div class="card-title">Total Batteries</div>
             <div id="totalBatteries" class="card-value">0</div>
           </div>
@@ -114,7 +106,7 @@
             <table id="stationsTable" class="table">
               <thead>
                 <tr>
-                  <th>ID</th><th>Name</th><th>Location</th><th>Type</th><th>Battery Count</th><th>Status</th><th>IoT Status</th><th>Actions</th>
+                  <th>ID</th><th>Name</th><th>Location</th><th>Type</th><th>Battery Count</th><th>Actions</th>
                 </tr>
               </thead>
               <tbody></tbody>
@@ -157,27 +149,12 @@
             <label>Location (district/suburb) <input id="stationLocation" placeholder="e.g., Kimironko, Nyarugenge" /></label>
             <label>Station Type
               <select id="stationType">
-                <option>Assembly</option>
-                <option>Service</option>
-                <option>Retail</option>
+                <option value="Spiro">Spiro</option>
+                <option value="Wholesale">Wholesale</option>
               </select>
             </label>
             <label>Initial Battery Count <input id="batteryCount" type="number" min="0" value="0" /></label>
-            <label>Status
-              <select id="stationStatus">
-                <option>Active</option>
-                <option>Inactive</option>
-              </select>
-            </label>
-            <label>IoT Status
-              <select id="iotStatus">
-                <option>Idle</option>
-                <option>Charging</option>
-                <option>Active</option>
-                <option>Under maintenance</option>
-                <option>Inactive</option>
-              </select>
-            </label>
+            <!-- Status and IoT Status removed from registration form per request -->
 
             <div class="form-actions">
               <button type="submit" class="btn primary">Register Station</button>

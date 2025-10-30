@@ -284,10 +284,11 @@ function render(){
   });
 
   // stats
-  totalStationsEl.textContent = stations.length;
-  activeStationsEl.textContent = stations.filter(s => s.status === 'Active').length;
-  inactiveStationsEl.textContent = stations.filter(s => s.status === 'Inactive').length;
-  totalBatteriesEl.textContent = stations.reduce((acc,s)=> acc + (Number(s.batteryCount)||0), 0);
+  if (totalStationsEl) totalStationsEl.textContent = stations.length;
+  // active/inactive cards removed from dashboard — only set if elements exist
+  if (activeStationsEl) activeStationsEl.textContent = stations.filter(s => s.status === 'Active').length;
+  if (inactiveStationsEl) inactiveStationsEl.textContent = stations.filter(s => s.status === 'Inactive').length;
+  if (totalBatteriesEl) totalBatteriesEl.textContent = stations.reduce((acc,s)=> acc + (Number(s.batteryCount)||0), 0);
 
   // table
   stationsTableBody.innerHTML = '';
@@ -304,8 +305,6 @@ function render(){
       <td>${escapeHtml(s.location)}</td>
       <td>${escapeHtml(s.type)}</td>
       <td>${Number(s.batteryCount)}</td>
-      <td>${escapeHtml(s.status)}</td>
-      <td>${escapeHtml(s.iotStatus)} ${offline ? '<span class="alert-icon" title="Offline">⚠</span>' : ''}</td>
       <td>
         <button class="btn" data-action="view" data-id="${s.id}" title="View station"><i class="fa-solid fa-eye"></i></button>
         <button class="btn danger" data-action="delete" data-id="${s.id}" title="Delete station"><i class="fa-solid fa-trash"></i></button>
@@ -412,11 +411,10 @@ if (stationForm) stationForm.addEventListener('submit', async (e)=>{
   const name = $('stationName').value.trim(); if (!name) { alert('Station name is required'); return; }
   const contact = $('stationContact').value.trim(); const location = $('stationLocation').value.trim();
   const type = $('stationType').value; const batteryCount = Number($('batteryCount').value) || 0;
-  const status = $('stationStatus').value; const iotStatus = $('iotStatus').value;
-  const payload = { name, contact, location, type, batteryCount, status, iotStatus };
+  const payload = { name, contact, location, type, batteryCount };
 
   try{
-    const previewHtml = `<div><strong>Name:</strong> ${escapeHtml(name)}</div><div><strong>Location:</strong> ${escapeHtml(location)}</div><div><strong>Initial batteries:</strong> ${batteryCount}</div><div><strong>Status:</strong> ${escapeHtml(status)}</div><div><strong>IoT:</strong> ${escapeHtml(iotStatus)}</div>`;
+  const previewHtml = `<div><strong>Name:</strong> ${escapeHtml(name)}</div><div><strong>Location:</strong> ${escapeHtml(location)}</div><div><strong>Initial batteries:</strong> ${batteryCount}</div>`;
     const ok = await openConfirmModal('Preview station before saving', previewHtml); if (!ok) return;
   } catch(e){}
 
@@ -428,7 +426,18 @@ if (stationForm) stationForm.addEventListener('submit', async (e)=>{
       if (!res.ok){ const body = await res.json().catch(()=>({message:'Failed'})); showBanner('Failed to register station: ' + (body.message||res.status), 'error'); return; }
       const j = await res.json();
       // fetch authoritative list
-      try{ const listRes = await apiFetch('/api/stations'); if (listRes.ok){ const lj = await listRes.json(); if (lj.stations) { stations = lj.stations.slice(); saveData(stations); } } } catch(e){}
+      try{
+          // include auth headers when fetching authoritative station list
+          const listRes = await apiFetch('/api/stations', { headers });
+          if (listRes && listRes.ok){ const lj = await listRes.json(); if (lj.stations) { stations = lj.stations.slice(); saveData(stations); }
+          } else {
+            // If list fetch failed (auth header missing or server error), optimistically add returned station to local list
+            if (j && j.station){ stations.push(j.station); saveData(stations); }
+          }
+        } catch(e){
+          // network error: optimistically add station locally so user sees it immediately
+          if (j && j.station){ stations.push(j.station); saveData(stations); }
+        }
       render();
       showBanner('Station registered', 'info', { actionText: 'View', onClick: ()=>{ if (j.station && j.station.id) { openStationModal(j.station.id); setActiveNav('dashboard'); highlightStationRow(j.station.id); } } });
       stationForm.reset(); setActiveNav('dashboard');
