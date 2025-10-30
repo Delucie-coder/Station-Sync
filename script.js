@@ -142,6 +142,9 @@ const registerCard = $('registerCard');
 const registerForm = $('registerForm');
 const showRegisterBtn = $('showRegister');
 const showLoginBtn = $('showLogin');
+// wire download button idempotently so it is safe to call from init() or after panel rerenders
+const dlBtn = $('downloadReportBtn');
+if (dlBtn && !dlBtn.dataset.downloadBound){ dlBtn.addEventListener('click', downloadReportCSV); dlBtn.dataset.downloadBound = '1'; }
 const rememberEl = $('rememberMe');
 const authGate = $('authGate');
 const authGateLogin = $('authGateLogin');
@@ -625,9 +628,15 @@ async function renderMaintenancePanel(){
     table.appendChild(thead); table.appendChild(tbody);
     el.innerHTML = ''; el.appendChild(table);
   } catch(e){ el.innerHTML = '<div class="muted">Error loading maintenance</div>'; }
+  // ensure download button is wired even if maintenance panel rerenders
+  try{
+    const btn = $('downloadReportBtn');
+    if (btn && !btn.dataset.downloadBound){ btn.addEventListener('click', downloadReportCSV); btn.dataset.downloadBound = '1'; }
+  } catch(e){}
 }
 
 let aggregateChart = null;
+let lastReportData = null;
 async function runReport(){
   const period = $('reportPeriod') ? $('reportPeriod').value : 'month';
   const from = $('reportFrom') ? $('reportFrom').value : '';
@@ -642,7 +651,8 @@ async function runReport(){
     const url = '/api/reports/aggregate' + (q.length ? ('?' + q.join('&')) : '');
     const res = await apiFetch(url, { headers });
     if (!res.ok) { showBanner('Failed to load report', 'error'); return; }
-    const j = await res.json(); const data = j.data || [];
+  const j = await res.json(); const data = j.data || [];
+  lastReportData = { period, from, to, data };
     const labels = data.map(d => d.period);
     const given = data.map(d => Number(d.givenOut)||0);
     const remaining = data.map(d => Number(d.remaining)||0);
@@ -667,6 +677,22 @@ async function runReport(){
       options: { responsive:true, interaction:{mode:'index'}, scales:{ x:{ stacked:false }, y:{ stacked:false } } }
     });
   } catch(e){ showBanner('Error generating report: ' + (e.message||e), 'error'); }
+}
+
+// Download the last generated report as CSV
+async function downloadReportCSV(){
+  try{
+    if (!lastReportData || !Array.isArray(lastReportData.data) || lastReportData.data.length === 0) return showBanner('No report data to download', 'warn');
+    const cols = ['period','givenOut','remaining','count'];
+    const rows = lastReportData.data.map(r => cols.map(c => '"' + String(r[c]||'') .replace(/"/g,'""') + '"').join(','));
+    const csv = cols.join(',') + '\n' + rows.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const urlb = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = urlb;
+    const fname = `report_${lastReportData.period}_${lastReportData.from||'all'}_${lastReportData.to||'all'}.csv`;
+    a.download = fname; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(urlb);
+    showBanner('Report downloaded', 'info');
+  } catch(e){ showBanner('Failed to download report: ' + (e.message||e), 'error'); }
 }
 
 async function exportCsvForActiveStation(){

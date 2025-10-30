@@ -134,6 +134,7 @@
           <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
             <label>Period
               <select id="reportPeriod">
+                <option value="day">Daily</option>
                 <option value="month" selected>Monthly</option>
                 <option value="year">Yearly</option>
               </select>
@@ -141,6 +142,7 @@
             <label>From <input id="reportFrom" type="date" /></label>
             <label>To <input id="reportTo" type="date" /></label>
             <button id="runReport" class="btn">Run</button>
+            <button id="downloadReportBtn" class="btn">Download CSV</button>
           </div>
           <canvas id="reportChart" height="140"></canvas>
         </div>
