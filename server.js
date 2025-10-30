@@ -186,6 +186,32 @@ app.post('/api/stations', authenticateToken, (req, res) => {
   } catch(e){ res.status(500).json({ message: 'Failed to add station' }); }
 });
 
+// Update a station
+app.put('/api/stations/:id', authenticateToken, (req, res) => {
+  try{
+    const id = req.params.id; const payload = req.body || {};
+    if (useSqlite){
+      db.prepare('UPDATE stations SET name=?, contact=?, location=?, type=?, battery_count=? WHERE id=?').run(payload.name||'', payload.contact||'', payload.location||'', payload.type||'', payload.batteryCount||0, id);
+      const updated = db.prepare('SELECT * FROM stations WHERE id = ?').get(id);
+      return res.json({ station: updated });
+    }
+    const idx = stations.findIndex(s => s.id === id);
+    if (idx === -1) return res.status(404).json({ message: 'Station not found' });
+    stations[idx] = Object.assign({}, stations[idx], { name: payload.name, contact: payload.contact, location: payload.location, type: payload.type, batteryCount: payload.batteryCount });
+    writeJSON(stationsFile, stations);
+    res.json({ station: stations[idx] });
+  } catch(e){ res.status(500).json({ message: 'Failed to update station' }); }
+});
+
+// Delete a station
+app.delete('/api/stations/:id', authenticateToken, (req, res) => {
+  try{
+    const id = req.params.id;
+    if (useSqlite){ const existing = db.prepare('SELECT * FROM stations WHERE id = ?').get(id); if (!existing) return res.status(404).json({ message: 'Station not found' }); db.prepare('DELETE FROM stations WHERE id = ?').run(id); return res.json({ deleted: true, station: existing }); }
+    const idx = stations.findIndex(s => s.id === id); if (idx === -1) return res.status(404).json({ message: 'Station not found' }); const removed = stations.splice(idx,1)[0]; writeJSON(stationsFile, stations); res.json({ deleted: true, station: removed });
+  } catch(e){ res.status(500).json({ message: 'Failed to delete station' }); }
+});
+
 // ===== RECORDS =====
 // Get records for a station, optionally filtered by date range (?from=YYYY-MM-DD&to=YYYY-MM-DD)
 app.get('/api/stations/:id/records', authenticateToken, (req, res) => {

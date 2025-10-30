@@ -307,6 +307,7 @@ function render(){
       <td>${Number(s.batteryCount)}</td>
       <td>
         <button class="btn" data-action="view" data-id="${s.id}" title="View station"><i class="fa-solid fa-eye"></i></button>
+        <button class="btn" data-action="edit" data-id="${s.id}" title="Edit station"><i class="fa-solid fa-pen-to-square"></i></button>
         <button class="btn danger" data-action="delete" data-id="${s.id}" title="Delete station"><i class="fa-solid fa-trash"></i></button>
       </td>
     `;
@@ -414,41 +415,55 @@ if (stationForm) stationForm.addEventListener('submit', async (e)=>{
   const payload = { name, contact, location, type, batteryCount };
 
   try{
-  const previewHtml = `<div><strong>Name:</strong> ${escapeHtml(name)}</div><div><strong>Location:</strong> ${escapeHtml(location)}</div><div><strong>Initial batteries:</strong> ${batteryCount}</div>`;
-    const ok = await openConfirmModal('Preview station before saving', previewHtml); if (!ok) return;
+    const previewHtml = `<div><strong>Name:</strong> ${escapeHtml(name)}</div><div><strong>Location:</strong> ${escapeHtml(location)}</div><div><strong>Initial batteries:</strong> ${batteryCount}</div>`;
+    const ok = await openConfirmModal(editingStationId ? 'Preview station before updating' : 'Preview station before saving', previewHtml); if (!ok) return;
   } catch(e){}
 
-  if (isAuthenticated()){
-    try{
-      const token = localStorage.getItem(TOKEN_KEY);
-      const headers = { 'Content-Type':'application/json' }; if (token) headers['Authorization'] = 'Bearer ' + token;
-      const res = await apiFetch('/api/stations', { method:'POST', headers, body: JSON.stringify(payload) });
-      if (!res.ok){ const body = await res.json().catch(()=>({message:'Failed'})); showBanner('Failed to register station: ' + (body.message||res.status), 'error'); return; }
+  if (!isAuthenticated()) return alert('Please sign in before registering a station.');
+
+  try{
+    const token = localStorage.getItem(TOKEN_KEY);
+    const headers = { 'Content-Type':'application/json' }; if (token) headers['Authorization'] = 'Bearer ' + token;
+
+    if (editingStationId){
+      // update existing station
+      const res = await apiFetch('/api/stations/' + encodeURIComponent(editingStationId), { method: 'PUT', headers, body: JSON.stringify(payload) });
+      if (!res.ok){ const body = await res.json().catch(()=>({message:'Update failed'})); showBanner('Failed to update station: ' + (body.message||res.status), 'error'); return; }
       const j = await res.json();
-      // fetch authoritative list
-      try{
-          // include auth headers when fetching authoritative station list
-          const listRes = await apiFetch('/api/stations', { headers });
-          if (listRes && listRes.ok){ const lj = await listRes.json(); if (lj.stations) { stations = lj.stations.slice(); saveData(stations); }
-          } else {
-            // If list fetch failed (auth header missing or server error), optimistically add returned station to local list
-            if (j && j.station){ stations.push(j.station); saveData(stations); }
-          }
-        } catch(e){
-          // network error: optimistically add station locally so user sees it immediately
-          if (j && j.station){ stations.push(j.station); saveData(stations); }
-        }
+      // update local list
+      const idx = stations.findIndex(s => s.id === editingStationId);
+      if (idx !== -1){ stations[idx] = Object.assign({}, stations[idx], payload); saveData(stations); }
       render();
-      showBanner('Station registered', 'info', { actionText: 'View', onClick: ()=>{ if (j.station && j.station.id) { openStationModal(j.station.id); setActiveNav('dashboard'); highlightStationRow(j.station.id); } } });
-      stationForm.reset(); setActiveNav('dashboard');
-      setTimeout(()=>{ if (j.station && j.station.id) highlightStationRow(j.station.id); }, 120);
-    } catch(err){ showBanner('Error saving station: ' + (err.message||err), 'error'); }
-    return;
-  }
-  alert('Please sign in before registering a station.');
+      showBanner('Station updated', 'info');
+      editingStationId = null;
+      const submitBtn = stationForm && stationForm.querySelector('button[type="submit"]'); if (submitBtn) submitBtn.textContent = 'Register Station';
+      stationForm.reset(); setActiveNav('dashboard'); return;
+    }
+
+    // create new station
+    const res = await apiFetch('/api/stations', { method:'POST', headers, body: JSON.stringify(payload) });
+    if (!res.ok){ const body = await res.json().catch(()=>({message:'Failed'})); showBanner('Failed to register station: ' + (body.message||res.status), 'error'); return; }
+    const j = await res.json();
+    // fetch authoritative list
+    try{
+      const listRes = await apiFetch('/api/stations', { headers });
+      if (listRes && listRes.ok){ const lj = await listRes.json(); if (lj.stations) { stations = lj.stations.slice(); saveData(stations); }
+      } else {
+        if (j && j.station){ stations.push(j.station); saveData(stations); }
+      }
+    } catch(e){ if (j && j.station){ stations.push(j.station); saveData(stations); } }
+    render();
+    showBanner('Station registered', 'info', { actionText: 'View', onClick: ()=>{ if (j.station && j.station.id) { openStationModal(j.station.id); setActiveNav('dashboard'); highlightStationRow(j.station.id); } } });
+    stationForm.reset(); setActiveNav('dashboard');
+    setTimeout(()=>{ if (j.station && j.station.id) highlightStationRow(j.station.id); }, 120);
+  } catch(err){ showBanner('Error saving station: ' + (err.message||err), 'error'); }
 });
 
-resetFormBtn && resetFormBtn.addEventListener('click', ()=> stationForm.reset());
+resetFormBtn && resetFormBtn.addEventListener('click', ()=>{
+  stationForm.reset();
+  editingStationId = null;
+  const submitBtn = stationForm && stationForm.querySelector('button[type="submit"]'); if (submitBtn) submitBtn.textContent = 'Register Station';
+});
 
 // table delegation
 document.addEventListener('click', (e)=>{
@@ -457,9 +472,21 @@ document.addEventListener('click', (e)=>{
   if (!isAuthenticated()){ alert('Please login first.'); return; }
   if (action === 'delete'){
     if (!confirm('Delete station?')) return;
-    stations = stations.filter(s=> s.id !== id); saveData(stations); render();
+    try{
+      if (isAuthenticated()){
+        const token = localStorage.getItem(TOKEN_KEY); const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+        const res = await apiFetch('/api/stations/' + encodeURIComponent(id), { method: 'DELETE', headers });
+        if (!res.ok){ showBanner('Failed to delete station on server', 'error'); return; }
+        // reload authoritative list
+        const listRes = await apiFetch('/api/stations', { headers }); if (listRes && listRes.ok){ const lj = await listRes.json(); if (lj.stations) { stations = lj.stations.slice(); saveData(stations); } }
+      } else {
+        stations = stations.filter(s=> s.id !== id); saveData(stations);
+      }
+      render();
+    } catch(e){ showBanner('Delete failed: ' + (e.message||e), 'error'); }
   }
   if (action === 'view'){ openStationModal(id); }
+  if (action === 'edit'){ openEditStation(id); }
 });
 
 // ----- Chart -----
@@ -494,6 +521,7 @@ const modalStationName = $('modalStationName'), modalStationInfo = $('modalStati
 const modalRecordsList = $('modalRecordsList'), recordForm = $('recordForm');
 
 let activeStationId = null, lastLoadedRecords = [], editingRecordId = null;
+let editingStationId = null;
 
 function formatDate(iso){ try{ return new Date(iso).toLocaleString(); } catch(e){ return iso; } }
 
@@ -532,6 +560,25 @@ function openStationModal(id){
   const f = $('recFrom') && $('recFrom').value; const t = $('recTo') && $('recTo').value;
   loadStationRecords(id, f, t);
   
+}
+// Open register form prefilled for editing an existing station
+function openEditStation(id){
+  const st = stations.find(s => s.id === id);
+  if (!st) return alert('Station not found');
+  editingStationId = id;
+  // Prefill the register form
+  setActiveNav('register');
+  setTimeout(()=>{
+    try{
+      const name = $('stationName'); const contact = $('stationContact'); const location = $('stationLocation'); const type = $('stationType'); const battery = $('batteryCount');
+      if (name) name.value = st.name || '';
+      if (contact) contact.value = st.contact || '';
+      if (location) location.value = st.location || '';
+      if (type) type.value = st.type || '';
+      if (battery) battery.value = Number(st.batteryCount) || 0;
+      const submitBtn = stationForm && stationForm.querySelector('button[type="submit"]'); if (submitBtn) submitBtn.textContent = 'Update Station';
+    } catch(e){}
+  }, 120);
 }
 function closeStationModal(){ stationModal.classList.add('hidden'); activeStationId = null; modalRecordsList.innerHTML=''; editingRecordId=null; recordForm && recordForm.reset(); }
 
