@@ -39,6 +39,9 @@
         </div>
         <div style="margin-top:8px">
           <button id="resumeSessionBtn" class="btn" style="display:none">Continue session</button>
+          <div style="margin-top:8px;text-align:center">
+            <button id="forgotPasswordBtn" class="btn" style="background:transparent;border:0;color:var(--muted);padding:6px">Forgot password?</button>
+          </div>
         </div>
         <!-- guest registration removed from login screen -->
       </form>
@@ -237,6 +240,33 @@
       <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
         <button id="confirmCancel" class="btn">Cancel</button>
         <button id="confirmOk" class="btn primary">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password reset modal -->
+  <div id="passwordResetModal" class="modal hidden">
+    <div class="modal-card">
+      <button id="closePasswordResetModal" class="modal-close">&times;</button>
+      <h3>Password reset</h3>
+      <div id="resetStep1">
+        <p class="muted">Enter your username to request a password reset token. Since this is a local prototype, the token will be shown here instead of emailed.</p>
+        <label>Username <input id="resetUsername" type="text" /></label>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+          <button id="requestResetBtn" class="btn primary">Request Token</button>
+        </div>
+        <div id="resetRequestResult" style="margin-top:8px"></div>
+      </div>
+      <hr />
+      <div id="resetStep2">
+        <p class="muted">Enter the token you received and set a new password.</p>
+        <label>Token <input id="resetToken" type="text" /></label>
+        <label>New password <input id="resetNewPass" type="password" /></label>
+        <label>Confirm password <input id="resetNewPass2" type="password" /></label>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+          <button id="performResetBtn" class="btn primary">Reset Password</button>
+        </div>
+        <div id="resetPerformResult" style="margin-top:8px"></div>
       </div>
     </div>
   </div>

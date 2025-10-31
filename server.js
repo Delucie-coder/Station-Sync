@@ -146,6 +146,52 @@ app.post('/api/register', async (req, res) => {
   } catch(e){ console.error('register error', e); res.status(500).json({ message: 'Register failed' }); }
 });
 
+// Password reset request: generate a one-time token (dev: returned in response)
+app.post('/api/request-password-reset', async (req, res) => {
+  const { username } = req.body || {};
+  if (!username) return res.status(400).json({ message: 'username required' });
+  try{
+    const token = Math.random().toString(36).slice(2,10).toUpperCase();
+    const expiry = new Date(Date.now() + (1000 * 60 * 30)).toISOString(); // 30 minutes
+    if (useSqlite){
+      const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      db.prepare('UPDATE users SET reset_token = ?, reset_expiry = ? WHERE username = ?').run(token, expiry, username);
+    } else {
+      const u = users.find(u => u.username === username);
+      if (!u) return res.status(404).json({ message: 'User not found' });
+      u.reset_token = token; u.reset_expiry = expiry; writeJSON(usersFile, users);
+    }
+    // In a real app we would email the token; for the prototype return it in the response so the user can copy it
+    res.json({ token, expiry, message: 'Reset token generated (development mode — token returned in response)' });
+  } catch(e){ console.error('reset request error', e); res.status(500).json({ message: 'Failed to generate reset token' }); }
+});
+
+// Perform password reset using token
+app.post('/api/reset-password', async (req, res) => {
+  const { username, token, newPassword } = req.body || {};
+  if (!username || !token || !newPassword) return res.status(400).json({ message: 'username, token and newPassword required' });
+  try{
+    if (useSqlite){
+      const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
+      if (!user) return res.status(404).json({ message: 'User not found' });
+      if (!user.reset_token || String(user.reset_token) !== String(token)) return res.status(403).json({ message: 'Invalid token' });
+      if (user.reset_expiry && new Date(user.reset_expiry) < new Date()) return res.status(403).json({ message: 'Token expired' });
+      const hashed = await bcrypt.hash(newPassword, 10);
+      db.prepare('UPDATE users SET password = ?, reset_token = NULL, reset_expiry = NULL WHERE username = ?').run(hashed, username);
+      return res.json({ message: 'Password reset successful' });
+    } else {
+      const u = users.find(u => u.username === username);
+      if (!u) return res.status(404).json({ message: 'User not found' });
+      if (!u.reset_token || String(u.reset_token) !== String(token)) return res.status(403).json({ message: 'Invalid token' });
+      if (u.reset_expiry && new Date(u.reset_expiry) < new Date()) return res.status(403).json({ message: 'Token expired' });
+      const hashed = await bcrypt.hash(newPassword, 10);
+      u.password = hashed; u.reset_token = null; u.reset_expiry = null; writeJSON(usersFile, users);
+      return res.json({ message: 'Password reset successful' });
+    }
+  } catch(e){ console.error('reset perform error', e); res.status(500).json({ message: 'Failed to reset password' }); }
+});
+
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   console.log(`Login attempt for username='${username}'`);

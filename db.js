@@ -20,6 +20,8 @@ function init(){
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
+      reset_token TEXT,
+      reset_expiry DATETIME,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS stations (
@@ -46,6 +48,14 @@ function init(){
       db.exec('ALTER TABLE records ADD COLUMN earnings REAL DEFAULT 0');
     }
   } catch(e){ console.warn('Could not ensure earnings column', e); }
+  // Ensure users table has reset_token and reset_expiry columns
+  try{
+    const ucols = db.prepare("PRAGMA table_info(users)").all();
+    const hasResetToken = ucols.some(c => c.name === 'reset_token');
+    const hasResetExpiry = ucols.some(c => c.name === 'reset_expiry');
+    if (!hasResetToken){ console.log('Adding reset_token column to users table'); db.exec('ALTER TABLE users ADD COLUMN reset_token TEXT'); }
+    if (!hasResetExpiry){ console.log('Adding reset_expiry column to users table'); db.exec('ALTER TABLE users ADD COLUMN reset_expiry DATETIME'); }
+  } catch(e){ console.warn('Could not ensure users reset columns', e); }
   return db;
 }
 

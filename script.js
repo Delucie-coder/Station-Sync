@@ -266,6 +266,35 @@ if (loginForm){
   });
 }
 
+// ----- Password reset UI -----
+const forgotPasswordBtn = $('forgotPasswordBtn');
+const passwordResetModal = $('passwordResetModal');
+const closePasswordResetModal = $('closePasswordResetModal');
+if (forgotPasswordBtn) forgotPasswordBtn.addEventListener('click', ()=>{ if (passwordResetModal) passwordResetModal.classList.remove('hidden'); });
+if (closePasswordResetModal) closePasswordResetModal.addEventListener('click', ()=>{ if (passwordResetModal) passwordResetModal.classList.add('hidden'); });
+
+const requestResetBtn = $('requestResetBtn');
+if (requestResetBtn) requestResetBtn.addEventListener('click', async ()=>{
+  const user = $('resetUsername') && $('resetUsername').value.trim(); if (!user) return alert('Enter username');
+  try{
+    const res = await apiFetch('/api/request-password-reset', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ username: user }) });
+    if (!res.ok){ const txt = await res.text().catch(()=>res.status); showBanner('Reset request failed: ' + txt, 'error'); return; }
+    const j = await res.json(); const out = $('resetRequestResult'); if (out) out.innerHTML = `<div class="muted">Token (development): <code style="font-family:monospace">${escapeHtml(j.token)}</code> — expires ${escapeHtml(j.expiry)}</div>`;
+  } catch(e){ showBanner('Reset request error: ' + (e.message||e), 'error'); }
+});
+
+const performResetBtn = $('performResetBtn');
+if (performResetBtn) performResetBtn.addEventListener('click', async ()=>{
+  const username = $('resetUsername') && $('resetUsername').value.trim(); const token = $('resetToken') && $('resetToken').value.trim(); const p1 = $('resetNewPass') && $('resetNewPass').value; const p2 = $('resetNewPass2') && $('resetNewPass2').value;
+  if (!username || !token || !p1) return alert('Fill username, token and new password');
+  if (p1 !== p2) return alert('Passwords do not match');
+  try{
+    const res = await apiFetch('/api/reset-password', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ username, token, newPassword: p1 }) });
+    if (!res.ok){ const txt = await res.json().catch(()=>({message:res.status})); showBanner('Reset failed: ' + (txt.message||res.status), 'error'); return; }
+    const j = await res.json(); const out = $('resetPerformResult'); if (out) out.innerHTML = `<div class="muted">${escapeHtml(j.message||'Password reset')}</div>`; showBanner('Password reset successful — you can now login', 'info');
+  } catch(e){ showBanner('Reset error: ' + (e.message||e), 'error'); }
+});
+
 // registration
 if (registerForm) registerForm.addEventListener('submit', async (e)=>{
   e.preventDefault();
