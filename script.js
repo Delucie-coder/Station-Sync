@@ -744,6 +744,8 @@ async function renderMaintenancePanel(){
 
 let aggregateChart = null;
 let lastReportData = null;
+// state for report table sorting & pagination
+let reportTableState = { sortKey: 'period', sortAsc: false, page: 1, pageSize: 10 };
 async function runReport(){
   const period = $('reportPeriod') ? $('reportPeriod').value : 'month';
   const from = $('reportFrom') ? $('reportFrom').value : '';
@@ -781,8 +783,93 @@ async function runReport(){
           { label: 'Remaining', data: remaining, backgroundColor: '#06b6b4' }
         ]
       },
-      options: { responsive:true, interaction:{mode:'index'}, scales:{ x:{ stacked:false }, y:{ stacked:false } } }
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index' },
+        plugins: { legend: { position: 'bottom' } },
+        layout: { padding: { top: 6, bottom: 6 } },
+        scales: {
+          x: {
+            stacked: false,
+            ticks: { autoSkip: true, maxRotation: 45, minRotation: 0, callback: function(value){ const v = String(this.getLabelForValue(value) || ''); return v.length > 18 ? v.slice(0,16) + '…' : v; } },
+            grid: { display: false }
+          },
+          y: { stacked: false, beginAtZero: true }
+        }
+      }
     });
+
+    // Render a readable table below the chart for accessibility / clarity (with sorting & pagination)
+    try{
+      const wrap = $('reportTableWrap'); if (wrap){
+        if (!Array.isArray(data) || data.length === 0){ wrap.innerHTML = '<div class="muted">No report data</div>'; }
+        else {
+          // prepare enhanced rows with averages
+          const rows = data.map(d => ({ period: d.period, givenOut: Number(d.givenOut||0), remaining: Number(d.remaining||0), count: Number(d.count||0), avgGiven: d.count ? (Number(d.givenOut||0)/Number(d.count||1)) : 0, avgRemaining: d.count ? (Number(d.remaining||0)/Number(d.count||1)) : 0 }));
+
+          // apply sorting
+          const sk = reportTableState.sortKey || 'period'; const sa = !!reportTableState.sortAsc;
+          rows.sort((a,b) => {
+            const av = a[sk]; const bv = b[sk];
+            if (typeof av === 'number' && typeof bv === 'number') return sa ? av - bv : bv - av;
+            return sa ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+          });
+
+          // pagination
+          const pageSize = Number(reportTableState.pageSize) || 10; const page = Number(reportTableState.page) || 1;
+          const total = rows.length; const totalPages = Math.max(1, Math.ceil(total / pageSize));
+          const start = (page - 1) * pageSize; const end = start + pageSize;
+          const pageRows = rows.slice(start, end);
+
+          // build tools: pagination controls + download buttons
+          const tools = document.createElement('div'); tools.style.display='flex'; tools.style.justifyContent='space-between'; tools.style.alignItems='center'; tools.style.marginBottom='8px';
+          const leftTools = document.createElement('div'); leftTools.style.display='flex'; leftTools.style.alignItems='center'; leftTools.style.gap='8px';
+          const perPage = document.createElement('select'); [5,10,20,50].forEach(n=>{ const o = document.createElement('option'); o.value = n; o.textContent = n + ' / page'; if (n===pageSize) o.selected = true; perPage.appendChild(o); });
+          perPage.addEventListener('change', ()=>{ reportTableState.pageSize = Number(perPage.value); reportTableState.page = 1; runReport(); });
+          leftTools.appendChild(perPage);
+          const pageInfo = document.createElement('div'); pageInfo.className='muted'; pageInfo.style.fontSize='0.9rem'; pageInfo.textContent = `Page ${page} of ${totalPages} — ${total} rows`;
+          leftTools.appendChild(pageInfo);
+          const pager = document.createElement('div'); pager.style.display='flex'; pager.style.gap='8px';
+          const prev = document.createElement('button'); prev.className='btn'; prev.textContent='‹ Prev'; prev.disabled = page <= 1; prev.addEventListener('click', ()=>{ if (reportTableState.page>1) { reportTableState.page--; runReport(); } });
+          const next = document.createElement('button'); next.className='btn'; next.textContent='Next ›'; next.disabled = page >= totalPages; next.addEventListener('click', ()=>{ if (reportTableState.page < totalPages) { reportTableState.page++; runReport(); } });
+          pager.appendChild(prev); pager.appendChild(next); leftTools.appendChild(pager);
+
+          const rightTools = document.createElement('div'); rightTools.style.display='flex'; rightTools.style.alignItems='center'; rightTools.style.gap='8px';
+          const dl = document.createElement('button'); dl.className='btn'; dl.textContent = 'Download Table CSV'; dl.addEventListener('click', downloadReportCSV);
+          const dlzip = document.createElement('button'); dlzip.className='btn'; dlzip.textContent = 'Download ZIP (CSV + Chart)'; dlzip.addEventListener('click', downloadReportZip);
+          rightTools.appendChild(dl); rightTools.appendChild(dlzip);
+          tools.appendChild(leftTools); tools.appendChild(rightTools);
+
+          const table = document.createElement('table'); table.className = 'table';
+          const thead = document.createElement('thead'); thead.innerHTML = '<tr><th data-key="period" class="sortable">Period</th><th data-key="givenOut" class="sortable" style="text-align:right">Given Out</th><th data-key="remaining" class="sortable" style="text-align:right">Remaining</th><th data-key="count" class="sortable" style="text-align:right">Count</th><th style="text-align:right">Avg Given</th><th style="text-align:right">Avg Remaining</th></tr>';
+          const tbody = document.createElement('tbody');
+
+          // header sorting handlers
+          Array.from(thead.querySelectorAll('th.sortable')).forEach(th=>{
+            th.style.cursor = 'pointer'; th.title = 'Click to sort';
+            th.addEventListener('click', ()=>{
+              const key = th.dataset.key; if (reportTableState.sortKey === key) reportTableState.sortAsc = !reportTableState.sortAsc; else { reportTableState.sortKey = key; reportTableState.sortAsc = false; }
+              reportTableState.page = 1; runReport();
+            });
+          });
+
+          pageRows.forEach(d => {
+            const tr = document.createElement('tr');
+            const p = document.createElement('td'); p.className = 'chart-label-wrap'; p.textContent = d.period;
+            const g = document.createElement('td'); g.style.textAlign = 'right'; g.textContent = d.givenOut.toLocaleString();
+            const rem = document.createElement('td'); rem.style.textAlign = 'right'; rem.textContent = d.remaining.toLocaleString();
+            const cnt = document.createElement('td'); cnt.style.textAlign = 'right'; cnt.textContent = d.count;
+            const ag = document.createElement('td'); ag.style.textAlign = 'right'; ag.textContent = (d.avgGiven||0).toFixed(2);
+            const ar = document.createElement('td'); ar.style.textAlign = 'right'; ar.textContent = (d.avgRemaining||0).toFixed(2);
+            tr.appendChild(p); tr.appendChild(g); tr.appendChild(rem); tr.appendChild(cnt); tr.appendChild(ag); tr.appendChild(ar);
+            tbody.appendChild(tr);
+          });
+          table.appendChild(thead); table.appendChild(tbody);
+          wrap.innerHTML = ''; wrap.appendChild(tools); wrap.appendChild(table);
+        }
+      }
+    } catch(e){ console.warn('Failed to render report table', e); }
   } catch(e){ showBanner('Error generating report: ' + (e.message||e), 'error'); }
 }
 
@@ -790,16 +877,58 @@ async function runReport(){
 async function downloadReportCSV(){
   try{
     if (!lastReportData || !Array.isArray(lastReportData.data) || lastReportData.data.length === 0) return showBanner('No report data to download', 'warn');
-    const cols = ['period','givenOut','remaining','count'];
-    const rows = lastReportData.data.map(r => cols.map(c => '"' + String(r[c]||'') .replace(/"/g,'""') + '"').join(','));
-    const csv = cols.join(',') + '\n' + rows.join('\n');
+    // Use human-friendly headers and include BOM for Excel compatibility
+    const headers = ['Period','Given Out','Remaining','Count'];
+    const rows = lastReportData.data.map(r => [String(r.period || ''), Number(r.givenOut||0), Number(r.remaining||0), Number(r.count||0)]);
+    const escapeCell = (v) => {
+      const s = String(v === null || v === undefined ? '' : v);
+      return '"' + s.replace(/"/g,'""') + '"';
+    };
+    const csvLines = [headers.map(escapeCell).join(',')].concat(rows.map(cols => cols.map(escapeCell).join(',')));
+    const csv = '\uFEFF' + csvLines.join('\n'); // prepend BOM
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const urlb = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = urlb;
-    const fname = `report_${lastReportData.period}_${lastReportData.from||'all'}_${lastReportData.to||'all'}.csv`;
+    const tstamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    const fname = `report_${lastReportData.period}_${lastReportData.from||'all'}_${lastReportData.to||'all'}_${tstamp}.csv`;
     a.download = fname; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(urlb);
     showBanner('Report downloaded', 'info');
   } catch(e){ showBanner('Failed to download report: ' + (e.message||e), 'error'); }
+}
+
+// Download report as ZIP containing CSV and chart image (requires JSZip loaded on the page)
+async function downloadReportZip(){
+  try{
+    if (!lastReportData || !Array.isArray(lastReportData.data) || lastReportData.data.length === 0) return showBanner('No report data to download', 'warn');
+    // Build CSV text (same as downloadReportCSV)
+    const headers = ['Period','Given Out','Remaining','Count'];
+    const rows = lastReportData.data.map(r => [String(r.period || ''), Number(r.givenOut||0), Number(r.remaining||0), Number(r.count||0)]);
+    const escapeCell = (v) => { const s = String(v === null || v === undefined ? '' : v); return '"' + s.replace(/"/g,'""') + '"'; };
+    const csvLines = [headers.map(escapeCell).join(',')].concat(rows.map(cols => cols.map(escapeCell).join(',')));
+    const csv = '\uFEFF' + csvLines.join('\n');
+    const csvBlob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+
+    // Grab chart image (if available)
+    const canvas = document.getElementById('reportChart');
+    let chartBlob = null;
+    if (canvas && canvas.toDataURL){
+      try{
+        const dataUrl = canvas.toDataURL('image/png');
+        const res = await fetch(dataUrl); chartBlob = await res.blob();
+      } catch(e){ console.warn('Failed to capture chart image', e); }
+    }
+
+    if (typeof JSZip === 'undefined'){ showBanner('JSZip not available — cannot create ZIP', 'error'); return; }
+    const zip = new JSZip();
+    const tstamp = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+    const csvName = `report_${lastReportData.period}_${lastReportData.from||'all'}_${lastReportData.to||'all'}_${tstamp}.csv`;
+    zip.file(csvName, csvBlob);
+    if (chartBlob) zip.file('chart.png', chartBlob);
+    const content = await zip.generateAsync({ type: 'blob' });
+    const url = URL.createObjectURL(content);
+    const a = document.createElement('a'); a.href = url; a.download = `report_bundle_${tstamp}.zip`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+    showBanner('ZIP downloaded', 'info');
+  } catch(e){ showBanner('Failed to create ZIP: ' + (e.message||e), 'error'); }
 }
 
 async function exportCsvForActiveStation(){

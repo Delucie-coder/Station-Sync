@@ -123,20 +123,29 @@
         <!-- Aggregated reports panel -->
         <div id="reportsPanel" class="panel" style="margin-top:12px">
           <h3>Activity Reports</h3>
-          <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-            <label>Period
-              <select id="reportPeriod">
-                <option value="day">Daily</option>
-                <option value="month" selected>Monthly</option>
-                <option value="year">Yearly</option>
-              </select>
-            </label>
-            <label>From <input id="reportFrom" type="date" /></label>
-            <label>To <input id="reportTo" type="date" /></label>
-            <button id="runReport" class="btn">Run</button>
-            <button id="downloadReportBtn" class="btn">Download CSV</button>
+          <div class="report-controls" style="margin-bottom:8px">
+            <div class="report-controls-left">
+              <label>Period
+                <select id="reportPeriod">
+                  <option value="day">Daily</option>
+                  <option value="month" selected>Monthly</option>
+                  <option value="year">Yearly</option>
+                </select>
+              </label>
+              <label>From <input id="reportFrom" type="date" /></label>
+              <label>To <input id="reportTo" type="date" /></label>
+            </div>
+            <div class="report-controls-right">
+              <button id="runReport" class="btn">Run</button>
+              <button id="downloadReportBtn" class="btn">Download CSV</button>
+            </div>
           </div>
-          <canvas id="reportChart" height="140"></canvas>
+
+          <div class="report-chart">
+            <canvas id="reportChart"></canvas>
+          </div>
+
+          <div id="reportTableWrap" class="report-table-wrap" aria-live="polite" style="margin-top:10px"></div>
         </div>
       </section>
 
@@ -272,6 +281,8 @@
   </footer>
 
   <!-- App logic -->
+  <!-- JSZip for zipping CSV + chart image when downloading reports -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

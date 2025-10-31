@@ -98,6 +98,25 @@ a{color:var(--accent)}
 .table th, .table td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:left}
 .table th{background:transparent;color:var(--muted);font-weight:700}
 
+/* Activity Reports styling */
+.report-controls{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.report-controls-left{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.report-controls-left label{font-size:0.92rem}
+.report-controls-left select,input{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:rgba(255,255,255,0.02);color:var(--muted)}
+.report-controls-right{display:flex;align-items:center;gap:8px}
+
+.report-chart{width:100%;min-height:200px;padding:8px;background:rgba(255,255,255,0.01);border-radius:8px}
+.report-chart canvas{width:100% !important;height:320px !important;display:block}
+
+.report-table-wrap{overflow:auto;background:rgba(255,255,255,0.01);padding:8px;border-radius:8px}
+.report-table-wrap table{width:100%;border-collapse:collapse;font-size:0.95rem}
+.report-table-wrap th,.report-table-wrap td{padding:8px 10px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:left}
+.report-table-wrap th{background:transparent;color:var(--muted);font-weight:700}
+
+/* Make sure long labels wrap and don't overlap chart axes */
+.chart-label-wrap{white-space:normal;word-break:break-word}
+
+
 /* row highlight and alerts */
 .row-alert{background:linear-gradient(90deg, rgba(255,160,90,0.06), transparent)}
 .alert-icon{margin-left:6px;color:var(--warn)}
@@ -143,6 +162,7 @@ a{color:var(--accent)}
   .main{padding:0}
   .top-right input{min-width:120px}
   .cards{flex-direction:row;overflow:auto}
+  .report-chart canvas{height:220px !important}
 }
 
 /* fine-grain */
