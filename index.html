@@ -64,7 +64,7 @@
       <nav class="nav">
         <button class="nav-item active" data-page="dashboard"><i class="fa-solid fa-chart-simple"></i> Dashboard</button>
         <button class="nav-item" data-page="register"><i class="fa-solid fa-square-plus"></i> Register Station</button>
-        <button class="nav-item" data-page="analytics"><i class="fa-solid fa-analytics"></i> Analytics</button>
+  <!-- Analytics removed from nav (unused) -->
         <div class="spacer"></div>
         <button id="logoutBtn" class="nav-item bottom"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
       </nav>
@@ -173,29 +173,9 @@
         </div>
       </section>
 
-          <!-- Storage / Migration panel (placed under Register as requested) -->
-          <section id="storage" class="page hidden">
-            <div class="panel">
-              <h3>Storage & Migration</h3>
-              <p class="muted">Migrate existing JSON data into SQLite for more reliable storage.</p>
-              <div style="display:flex;gap:8px;align-items:center">
-                <button id="migrateBtn" class="btn">Migrate to SQLite</button>
-                <div id="migrateStatus" class="muted"></div>
-                <button id="showBackupsBtn" class="btn">Show Backups</button>
-              </div>
-            </div>
-          </section>
+          <!-- Storage & Migration removed (unused) -->
 
-      <section id="analytics" class="page hidden">
-        <div class="panel">
-          <h3>IoT Status Overview</h3>
-          <canvas id="iotChart" height="120"></canvas>
-        </div>
-        <div class="panel">
-          <h3>Station Distribution by Location (sample)</h3>
-          <div id="locationList" class="location-list"></div>
-        </div>
-      </section>
+      <!-- Analytics section removed (unused) -->
 
     </main>
   </div>
@@ -240,7 +220,8 @@
         <label>Remaining <input id="recRemaining" type="number" min="0" value="0" required /></label>
         <label>Need repair <input id="recRepair" type="number" min="0" value="0" /></label>
         <label>Damaged <input id="recDamaged" type="number" min="0" value="0" /></label>
-        <label>Notes <input id="recNotes" type="text" placeholder="Optional notes" /></label>
+  <label>Earnings (RWF) <input id="recEarnings" type="number" step="0.01" min="0" value="0" /></label>
+  <label>Notes <input id="recNotes" type="text" placeholder="Optional notes" /></label>
         <div class="form-actions">
           <button type="submit" class="btn primary">Save Record</button>
         </div>

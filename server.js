@@ -90,6 +90,30 @@ if (!useSqlite){
   }
 }
 
+// Create a developer/test user automatically when running in non-production
+try{
+  const DEV_USER = process.env.DEV_TEST_USER || 'dev';
+  const DEV_PASS = process.env.DEV_TEST_PASS || 'devpass';
+  if (process.env.NODE_ENV !== 'production'){
+    // If using sqlite, insert into users table if missing
+    if (useSqlite && db){
+      try{
+        const found = db.prepare('SELECT * FROM users WHERE username = ?').get(DEV_USER);
+        if (!found){ const hash = bcrypt.hashSync(DEV_PASS, 10); db.prepare('INSERT INTO users(username,password,created_at) VALUES(?,?,?)').run(DEV_USER, hash, new Date().toISOString()); console.log(`✅ Created dev user '${DEV_USER}' with password from DEV_TEST_PASS or default`); }
+      } catch(e){ console.warn('Failed to create dev user in sqlite', e); }
+    } else {
+      try{
+        if (!users.find(u => u.username === DEV_USER)){
+          const hash = bcrypt.hashSync(DEV_PASS, 10);
+          users.push({ id: Date.now(), username: DEV_USER, password: hash });
+          writeJSON(usersFile, users);
+          console.log(`✅ Created dev user '${DEV_USER}' in users.json (password from DEV_TEST_PASS or default)`);
+        }
+      } catch(e){ console.warn('Failed to create dev user in users.json', e); }
+    }
+  }
+} catch(e){ console.warn('Dev user creation skipped', e); }
+
 // JWT middleware
 function authenticateToken(req, res, next) {
   const authHeader = req.headers['authorization'];
@@ -241,8 +265,8 @@ app.post('/api/stations/:id/records', authenticateToken, (req, res) => {
     if (useSqlite){
       // check existing
       const existing = db.prepare('SELECT * FROM records WHERE station_id = ? AND date = ?').get(stationId, payload.date);
-      if (existing){ db.prepare('UPDATE records SET start_of_day=?,given_out=?,remaining=?,need_repair=?,damaged=?,notes=?,updated_at=? WHERE id=?').run(payload.startOfDay||0,payload.givenOut||0,payload.remaining||0,payload.needRepair||0,payload.damaged||0,payload.notes||'',new Date().toISOString(), existing.id); const updated = db.prepare('SELECT * FROM records WHERE id=?').get(existing.id); return res.json({ record: updated, upsert: true }); }
-      const id = 'RC' + Date.now().toString(36).slice(-6).toUpperCase(); db.prepare('INSERT INTO records(id,station_id,date,start_of_day,given_out,remaining,need_repair,damaged,notes,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(id, stationId, payload.date, payload.startOfDay||0, payload.givenOut||0, payload.remaining||0, payload.needRepair||0, payload.damaged||0, payload.notes||'', new Date().toISOString()); const newRec = db.prepare('SELECT * FROM records WHERE id = ?').get(id); return res.json({ record: newRec });
+  if (existing){ db.prepare('UPDATE records SET start_of_day=?,given_out=?,remaining=?,need_repair=?,damaged=?,earnings=?,notes=?,updated_at=? WHERE id=?').run(payload.startOfDay||0,payload.givenOut||0,payload.remaining||0,payload.needRepair||0,payload.damaged||0, Number(payload.earnings||0), payload.notes||'',new Date().toISOString(), existing.id); const updated = db.prepare('SELECT * FROM records WHERE id=?').get(existing.id); return res.json({ record: updated, upsert: true }); }
+  const id = 'RC' + Date.now().toString(36).slice(-6).toUpperCase(); db.prepare('INSERT INTO records(id,station_id,date,start_of_day,given_out,remaining,need_repair,damaged,earnings,notes,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)').run(id, stationId, payload.date, payload.startOfDay||0, payload.givenOut||0, payload.remaining||0, payload.needRepair||0, payload.damaged||0, Number(payload.earnings||0), payload.notes||'', new Date().toISOString()); const newRec = db.prepare('SELECT * FROM records WHERE id = ?').get(id); return res.json({ record: newRec });
     }
     const existing = records.find(r => r.stationId === stationId && r.date === payload.date);
     if (existing){ Object.assign(existing, payload, { updatedAt: new Date().toISOString() }); writeJSON(recordsFile, records); return res.json({ record: existing, upsert: true }); }
@@ -255,7 +279,7 @@ app.post('/api/stations/:id/records', authenticateToken, (req, res) => {
 app.put('/api/stations/:id/records/:rid', authenticateToken, (req, res) => {
   try{
     const rid = req.params.rid; const payload = req.body || {};
-    if (useSqlite){ const existing = db.prepare('SELECT * FROM records WHERE id = ?').get(rid); if (!existing) return res.status(404).json({ message: 'Record not found' }); db.prepare('UPDATE records SET date=?,start_of_day=?,given_out=?,remaining=?,need_repair=?,damaged=?,notes=?,updated_at=? WHERE id=?').run(payload.date||existing.date,payload.startOfDay||existing.start_of_day,payload.givenOut||existing.given_out,payload.remaining||existing.remaining,payload.needRepair||existing.need_repair,payload.damaged||existing.damaged,payload.notes||existing.notes,new Date().toISOString(), rid); const updated = db.prepare('SELECT * FROM records WHERE id=?').get(rid); return res.json({ record: updated }); }
+  if (useSqlite){ const existing = db.prepare('SELECT * FROM records WHERE id = ?').get(rid); if (!existing) return res.status(404).json({ message: 'Record not found' }); db.prepare('UPDATE records SET date=?,start_of_day=?,given_out=?,remaining=?,need_repair=?,damaged=?,earnings=?,notes=?,updated_at=? WHERE id=?').run(payload.date||existing.date,payload.startOfDay||existing.start_of_day,payload.givenOut||existing.given_out,payload.remaining||existing.remaining,payload.needRepair||existing.need_repair,payload.damaged||existing.damaged, Number(payload.earnings!==undefined ? payload.earnings : (existing.earnings || 0)),payload.notes||existing.notes,new Date().toISOString(), rid); const updated = db.prepare('SELECT * FROM records WHERE id=?').get(rid); return res.json({ record: updated }); }
     const idx = records.findIndex(r => r.id === rid); if (idx === -1) return res.status(404).json({ message: 'Record not found' }); Object.assign(records[idx], payload, { updatedAt: new Date().toISOString() }); writeJSON(recordsFile, records); res.json({ record: records[idx] });
   } catch(e){ res.status(500).json({ message: 'Failed to update record' }); }
 });
@@ -326,14 +350,17 @@ app.get('/api/reports/aggregate', authenticateToken, (req, res) => {
       let key = r.date;
       if (period === 'month') key = r.date.slice(0,7); // YYYY-MM
       else if (period === 'year') key = r.date.slice(0,4); // YYYY
-      buckets[key] = buckets[key] || { givenOut: 0, remaining: 0, count: 0 };
+      buckets[key] = buckets[key] || { givenOut: 0, remaining: 0, earnings: 0, count: 0 };
       buckets[key].givenOut += Number(r.givenOut)||0;
       buckets[key].remaining += Number(r.remaining)||0;
+      // support various possible earnings field names
+      const earningsVal = Number(r.earnings || r.earning || r.earnings_amount || 0) || 0;
+      buckets[key].earnings += earningsVal;
       buckets[key].count += 1;
     });
     // sort keys
     const keys = Object.keys(buckets).sort();
-    const data = keys.map(k => ({ period: k, givenOut: buckets[k].givenOut, remaining: buckets[k].remaining, count: buckets[k].count }));
+  const data = keys.map(k => ({ period: k, givenOut: buckets[k].givenOut, remaining: buckets[k].remaining, earnings: buckets[k].earnings || 0, count: buckets[k].count }));
     res.json({ period: period, data });
   } catch(e){ res.status(500).json({ message: 'Failed to compute aggregate report' }); }
 });

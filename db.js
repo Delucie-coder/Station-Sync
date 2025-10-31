@@ -32,11 +32,20 @@ function init(){
       station_id TEXT NOT NULL,
       date TEXT NOT NULL,
       start_of_day INTEGER, given_out INTEGER, remaining INTEGER,
-      need_repair INTEGER, damaged INTEGER, notes TEXT,
+      need_repair INTEGER, damaged INTEGER, earnings REAL DEFAULT 0, notes TEXT,
       created_at DATETIME, updated_at DATETIME,
       FOREIGN KEY (station_id) REFERENCES stations(id) ON DELETE CASCADE
     );
   `);
+  // Ensure earnings column exists on older DBs (safe migration)
+  try{
+    const cols = db.prepare("PRAGMA table_info(records)").all();
+    const hasEarnings = cols.some(c => c.name === 'earnings');
+    if (!hasEarnings){
+      console.log('Adding earnings column to records table');
+      db.exec('ALTER TABLE records ADD COLUMN earnings REAL DEFAULT 0');
+    }
+  } catch(e){ console.warn('Could not ensure earnings column', e); }
   return db;
 }
 
@@ -50,7 +59,7 @@ function importFromJson(db, usersFile, stationsFile, recordsFile){
 
   const insertUser = db.prepare('INSERT OR IGNORE INTO users(username,password,created_at) VALUES(?,?,?)');
   const insertStation = db.prepare('INSERT OR IGNORE INTO stations(id,name,contact,location,type,battery_count,status,iot_status,created_at) VALUES(?,?,?,?,?,?,?,?,?)');
-  const insertRecord = db.prepare('INSERT OR IGNORE INTO records(id,station_id,date,start_of_day,given_out,remaining,need_repair,damaged,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?)');
+  const insertRecord = db.prepare('INSERT OR IGNORE INTO records(id,station_id,date,start_of_day,given_out,remaining,need_repair,damaged,earnings,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)');
 
   const utx = db.transaction((items)=>{
     items.forEach(u => { try{ insertUser.run(u.username, u.password || u.hash || '', u.createdAt || new Date().toISOString()); inserted.users++; }catch(e){} });
@@ -59,7 +68,7 @@ function importFromJson(db, usersFile, stationsFile, recordsFile){
     items.forEach(s => { try{ insertStation.run(s.id, s.name, s.contact||'', s.location||'', s.type||'', s.batteryCount||0, s.status||'', s.iotStatus||'', s.createdAt||new Date().toISOString()); inserted.stations++; }catch(e){} });
   });
   const rtx = db.transaction((items)=>{
-    items.forEach(r => { try{ insertRecord.run(r.id, r.stationId, r.date, r.startOfDay||0, r.givenOut||0, r.remaining||0, r.needRepair||0, r.damaged||0, r.notes||'', r.createdAt||new Date().toISOString(), r.updatedAt||null); inserted.records++; }catch(e){} });
+  items.forEach(r => { try{ const earn = Number(r.earnings || r.earning || r.earnings_amount || 0) || 0; insertRecord.run(r.id, r.stationId, r.date, r.startOfDay||0, r.givenOut||0, r.remaining||0, r.needRepair||0, r.damaged||0, earn, r.notes||'', r.createdAt||new Date().toISOString(), r.updatedAt||null); inserted.records++; }catch(e){} });
   });
 
   try{ utx(users || []); stx(stations || []); rtx(records || []); }catch(e){ console.warn('Import error', e); }

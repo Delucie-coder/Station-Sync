@@ -167,6 +167,9 @@ const totalBatteriesEl = $('totalBatteries');
 const stationForm = $('stationForm');
 const resetFormBtn = $('resetForm');
 const locationList = $('locationList');
+const maintenancePanelEl = $('maintenancePanel');
+const reportsPanelEl = $('reportsPanel');
+const reportTableWrapEl = $('reportTableWrap');
 
 // simulation controls: (we add small UI elements into the topbar)
 function ensureSimControls(){
@@ -343,6 +346,7 @@ function normalizeRecord(r){ if (!r) return r; return {
   remaining: (r.remaining !== undefined) ? r.remaining : (r.remaining !== undefined ? r.remaining : 0),
   needRepair: (r.needRepair !== undefined) ? r.needRepair : (r.need_repair !== undefined ? r.need_repair : 0),
   damaged: (r.damaged !== undefined) ? r.damaged : (r.damaged !== undefined ? r.damaged : 0),
+  earnings: (r.earnings !== undefined) ? Number(r.earnings) : (r.earning !== undefined ? Number(r.earning) : (r.earnings_amount !== undefined ? Number(r.earnings_amount) : 0)),
   notes: r.notes || r.note || '',
   createdAt: r.createdAt || r.created_at || '',
   updatedAt: r.updatedAt || r.updated_at || ''
@@ -646,7 +650,7 @@ async function loadStationRecords(stationId, from, to){
     lastLoadedRecords.forEach(r=>{
       const div = document.createElement('div'); div.className='record-item';
       const info = document.createElement('div'); info.className='record-info';
-      info.innerHTML = `<strong>${escapeHtml(r.date)}</strong> — Start: ${r.startOfDay}, Given: ${r.givenOut}, Remaining: ${r.remaining}, Repair: ${r.needRepair}, Damaged: ${r.damaged}`;
+      info.innerHTML = `<strong>${escapeHtml(r.date)}</strong> — Start: ${r.startOfDay}, Given: ${r.givenOut}, Remaining: ${r.remaining}, Repair: ${r.needRepair}, Damaged: ${r.damaged}, Earnings: ${Number(r.earnings||0).toFixed(2)} RWF`;
       const notes = document.createElement('div'); notes.className = 'muted'; notes.textContent = r.notes || '';
       const meta = document.createElement('div'); meta.className = 'muted'; meta.textContent = formatDate(r.createdAt) + (r.updatedAt ? (' • Updated: ' + formatDate(r.updatedAt)) : '');
       const actions = document.createElement('div'); actions.className='record-actions';
@@ -665,7 +669,7 @@ recordForm && recordForm.addEventListener('submit', async (e)=>{
   if (!activeStationId) return alert('No station selected');
   const payload = {
     date: $('recDate').value, startOfDay: Number($('recStart').value)||0, givenOut: Number($('recGiven').value)||0,
-    remaining: Number($('recRemaining').value)||0, needRepair: Number($('recRepair').value)||0, damaged: Number($('recDamaged').value)||0, notes: $('recNotes').value||''
+    remaining: Number($('recRemaining').value)||0, needRepair: Number($('recRepair').value)||0, damaged: Number($('recDamaged').value)||0, earnings: Number($('recEarnings') ? $('recEarnings').value : 0) || 0, notes: $('recNotes').value||''
   };
   try{
     const headers = getAuthHeaders({'Content-Type':'application/json'});
@@ -695,6 +699,7 @@ function startEditRecord(record){
   editingRecordId = record.id;
   $('recDate').value = record.date; $('recStart').value = record.startOfDay||0; $('recGiven').value = record.givenOut||0;
   $('recRemaining').value = record.remaining||0; $('recRepair').value = record.needRepair||0; $('recDamaged').value = record.damaged||0; $('recNotes').value = record.notes||'';
+  try{ if ($('recEarnings')) $('recEarnings').value = Number(record.earnings||0); } catch(e){}
   const submitBtn = recordForm.querySelector('button[type="submit"]'); if (submitBtn) submitBtn.textContent = 'Update Record';
   showBanner('Editing record — make changes and Save', 'info');
 }
@@ -717,9 +722,10 @@ async function renderMaintenancePanel(){
     const token = localStorage.getItem(TOKEN_KEY);
     const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
     const res = await apiFetch('/api/maintenance', { headers });
-    if (!res.ok) { el.innerHTML = '<div class="muted">Failed to load maintenance</div>'; return; }
+    if (!res.ok) { el.innerHTML = '<div class="muted">Failed to load maintenance</div>'; if (maintenancePanelEl) maintenancePanelEl.classList.add('hidden'); return; }
     const j = await res.json(); const list = j.maintenance || [];
-    if (!list.length){ el.innerHTML = '<div class="muted">No maintenance items</div>'; return; }
+    if (!list.length){ el.innerHTML = '<div class="muted">No maintenance items</div>'; if (maintenancePanelEl) maintenancePanelEl.classList.add('hidden'); return; }
+    if (maintenancePanelEl) maintenancePanelEl.classList.remove('hidden');
     // build table
     const table = document.createElement('table'); table.className='table';
     const thead = document.createElement('thead'); thead.innerHTML = '<tr><th>Station</th><th>Need Repair</th><th>Damaged</th><th>Last Record</th><th>Action</th></tr>';
@@ -802,9 +808,12 @@ async function runReport(){
 
     // Render a readable table below the chart for accessibility / clarity (with sorting & pagination)
     try{
-      const wrap = $('reportTableWrap'); if (wrap){
-        if (!Array.isArray(data) || data.length === 0){ wrap.innerHTML = '<div class="muted">No report data</div>'; }
-        else {
+      const wrap = reportTableWrapEl || $('reportTableWrap');
+      if (wrap){
+        if (!Array.isArray(data) || data.length === 0){
+          wrap.innerHTML = '<div class="muted">No report data</div>'; wrap.classList.add('hidden');
+        } else {
+          wrap.classList.remove('hidden');
           // prepare enhanced rows with averages
           const rows = data.map(d => ({ period: d.period, givenOut: Number(d.givenOut||0), remaining: Number(d.remaining||0), count: Number(d.count||0), avgGiven: d.count ? (Number(d.givenOut||0)/Number(d.count||1)) : 0, avgRemaining: d.count ? (Number(d.remaining||0)/Number(d.count||1)) : 0 }));
 
@@ -878,8 +887,8 @@ async function downloadReportCSV(){
   try{
     if (!lastReportData || !Array.isArray(lastReportData.data) || lastReportData.data.length === 0) return showBanner('No report data to download', 'warn');
     // Use human-friendly headers and include BOM for Excel compatibility
-    const headers = ['Period','Given Out','Remaining','Count'];
-    const rows = lastReportData.data.map(r => [String(r.period || ''), Number(r.givenOut||0), Number(r.remaining||0), Number(r.count||0)]);
+  const headers = ['Period','Given Out','Remaining','Earnings','Count'];
+  const rows = lastReportData.data.map(r => [String(r.period || ''), Number(r.givenOut||0), Number(r.remaining||0), Number(r.earnings||0), Number(r.count||0)]);
     const escapeCell = (v) => {
       const s = String(v === null || v === undefined ? '' : v);
       return '"' + s.replace(/"/g,'""') + '"';
@@ -901,8 +910,8 @@ async function downloadReportZip(){
   try{
     if (!lastReportData || !Array.isArray(lastReportData.data) || lastReportData.data.length === 0) return showBanner('No report data to download', 'warn');
     // Build CSV text (same as downloadReportCSV)
-    const headers = ['Period','Given Out','Remaining','Count'];
-    const rows = lastReportData.data.map(r => [String(r.period || ''), Number(r.givenOut||0), Number(r.remaining||0), Number(r.count||0)]);
+  const headers = ['Period','Given Out','Remaining','Earnings','Count'];
+  const rows = lastReportData.data.map(r => [String(r.period || ''), Number(r.givenOut||0), Number(r.remaining||0), Number(r.earnings||0), Number(r.count||0)]);
     const escapeCell = (v) => { const s = String(v === null || v === undefined ? '' : v); return '"' + s.replace(/"/g,'""') + '"'; };
     const csvLines = [headers.map(escapeCell).join(',')].concat(rows.map(cols => cols.map(escapeCell).join(',')));
     const csv = '\uFEFF' + csvLines.join('\n');
@@ -944,7 +953,7 @@ async function exportCsvForActiveStation(){
     const res = await apiFetch(url, { headers }); if (!res.ok) throw new Error('Failed to fetch records');
   const j = await res.json(); const recs = (j.records || []).map(normalizeRecord);
   if (!recs.length) return alert('No records to export for selected range');
-    const cols = ['date','startOfDay','givenOut','remaining','needRepair','damaged','notes'];
+  const cols = ['date','startOfDay','givenOut','remaining','needRepair','damaged','earnings','notes'];
     const rows = recs.map(r => cols.map(c => '"' + String(r[c] || '').replace(/"/g,'""') + '"').join(','));
     const csv = cols.join(',') + '\n' + rows.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
