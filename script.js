@@ -93,6 +93,8 @@ async function apiFetch(path, options){
 
 // ----- Auth helpers -----
 function isAuthenticated(){ return currentUser !== null; }
+// helper to return auth headers when available
+function getAuthHeaders(extra){ const token = localStorage.getItem(TOKEN_KEY); const h = Object.assign({}, extra || {}); if (token) h['Authorization'] = 'Bearer ' + token; return h; }
 function showUser(name){ const b = $('userBadge'); if (!b) return; b.textContent = `Signed in: ${name}`; b.classList.remove('hidden'); }
 function hideUser(){ const b = $('userBadge'); if (!b) return; b.textContent=''; b.classList.add('hidden'); }
 function clearAuth(){ try{ sessionStorage.removeItem('stationsync_auth'); localStorage.removeItem(TOKEN_KEY); }catch(e){} hideUser(); currentUser = null; lockUI(); }
@@ -255,7 +257,8 @@ if (loginForm){
           }
         }
       } catch(e){}
-      alert(err.message || 'Login failed');
+      console.error('Login failure:', err);
+      showBanner('Login failed: ' + (err.message || 'Unknown error'), 'error');
     }
   });
 }
@@ -316,6 +319,49 @@ function render(){
 
   updateChart();
   renderLocations();
+}
+
+// normalize server station rows (sqlite uses snake_case column names)
+function normalizeStation(s){ if (!s) return s; return {
+  id: s.id || s.ID || s.station_id || s.stationId,
+  name: s.name || s.station_name || s.stationName || '',
+  contact: s.contact || s.phone || '',
+  location: s.location || s.loc || '',
+  type: s.type || s.station_type || s.type || '',
+  batteryCount: (s.batteryCount !== undefined && s.batteryCount !== null) ? Number(s.batteryCount) : (s.battery_count !== undefined ? Number(s.battery_count) : 0),
+  status: s.status || s.state || '',
+  iotStatus: s.iotStatus || s.iot_status || s.iotState || '',
+  createdAt: s.createdAt || s.created_at || ''
+}; }
+
+function normalizeRecord(r){ if (!r) return r; return {
+  id: r.id || r.ID,
+  stationId: r.stationId || r.station_id || r.station,
+  date: r.date,
+  startOfDay: (r.startOfDay !== undefined) ? r.startOfDay : (r.start_of_day !== undefined ? r.start_of_day : 0),
+  givenOut: (r.givenOut !== undefined) ? r.givenOut : (r.given_out !== undefined ? r.given_out : 0),
+  remaining: (r.remaining !== undefined) ? r.remaining : (r.remaining !== undefined ? r.remaining : 0),
+  needRepair: (r.needRepair !== undefined) ? r.needRepair : (r.need_repair !== undefined ? r.need_repair : 0),
+  damaged: (r.damaged !== undefined) ? r.damaged : (r.damaged !== undefined ? r.damaged : 0),
+  notes: r.notes || r.note || '',
+  createdAt: r.createdAt || r.created_at || '',
+  updatedAt: r.updatedAt || r.updated_at || ''
+}; }
+
+// Fetch stations from server and normalize them into the local `stations` array
+async function fetchStations(){
+  if (!isAuthenticated()) return;
+  try{
+    const headers = getAuthHeaders();
+    const res = await apiFetch('/api/stations', { headers });
+    if (!res || !res.ok) return;
+    const j = await res.json();
+    if (j && Array.isArray(j.stations)){
+      stations = j.stations.map(normalizeStation);
+      saveData(stations);
+      render();
+    }
+  } catch(e){ console.warn('fetchStations error', e); }
 }
 
 // highlight row
@@ -447,9 +493,9 @@ if (stationForm) stationForm.addEventListener('submit', async (e)=>{
     // fetch authoritative list
     try{
       const listRes = await apiFetch('/api/stations', { headers });
-      if (listRes && listRes.ok){ const lj = await listRes.json(); if (lj.stations) { stations = lj.stations.slice(); saveData(stations); }
+      if (listRes && listRes.ok){ const lj = await listRes.json(); if (lj.stations) { stations = lj.stations.map(normalizeStation); saveData(stations); }
       } else {
-        if (j && j.station){ stations.push(j.station); saveData(stations); }
+        if (j && j.station){ stations.push(normalizeStation(j.station)); saveData(stations); }
       }
     } catch(e){ if (j && j.station){ stations.push(j.station); saveData(stations); } }
     render();
@@ -466,7 +512,7 @@ resetFormBtn && resetFormBtn.addEventListener('click', ()=>{
 });
 
 // table delegation
-document.addEventListener('click', (e)=>{
+document.addEventListener('click', async (e)=>{
   const btn = e.target.closest('button'); if (!btn) return;
   const action = btn.dataset.action; const id = btn.dataset.id; if (!action) return;
   if (!isAuthenticated()){ alert('Please login first.'); return; }
@@ -478,7 +524,7 @@ document.addEventListener('click', (e)=>{
         const res = await apiFetch('/api/stations/' + encodeURIComponent(id), { method: 'DELETE', headers });
         if (!res.ok){ showBanner('Failed to delete station on server', 'error'); return; }
         // reload authoritative list
-        const listRes = await apiFetch('/api/stations', { headers }); if (listRes && listRes.ok){ const lj = await listRes.json(); if (lj.stations) { stations = lj.stations.slice(); saveData(stations); } }
+        const listRes = await apiFetch('/api/stations', { headers }); if (listRes && listRes.ok){ const lj = await listRes.json(); if (lj.stations) { stations = lj.stations.map(normalizeStation); saveData(stations); } }
       } else {
         stations = stations.filter(s=> s.id !== id); saveData(stations);
       }
@@ -591,12 +637,13 @@ async function loadStationRecords(stationId, from, to){
     if (from) params.push('from=' + encodeURIComponent(from));
     if (to) params.push('to=' + encodeURIComponent(to));
     if (params.length) url += '?' + params.join('&');
-    const res = await apiFetch(url);
+    const headers = getAuthHeaders();
+    const res = await apiFetch(url, { headers });
     if (!res.ok){ modalRecordsList.innerHTML = '<div class="muted">No records</div>'; return; }
-    const j = await res.json(); const recs = j.records || []; lastLoadedRecords = recs.slice();
+    const j = await res.json(); const recs = j.records || []; lastLoadedRecords = recs.map(normalizeRecord);
     if (recs.length === 0) { modalRecordsList.innerHTML = '<div class="muted">No records</div>'; return; }
     modalRecordsList.innerHTML = '';
-    recs.forEach(r=>{
+    lastLoadedRecords.forEach(r=>{
       const div = document.createElement('div'); div.className='record-item';
       const info = document.createElement('div'); info.className='record-info';
       info.innerHTML = `<strong>${escapeHtml(r.date)}</strong> — Start: ${r.startOfDay}, Given: ${r.givenOut}, Remaining: ${r.remaining}, Repair: ${r.needRepair}, Damaged: ${r.damaged}`;
@@ -621,9 +668,12 @@ recordForm && recordForm.addEventListener('submit', async (e)=>{
     remaining: Number($('recRemaining').value)||0, needRepair: Number($('recRepair').value)||0, damaged: Number($('recDamaged').value)||0, notes: $('recNotes').value||''
   };
   try{
+    const headers = getAuthHeaders({'Content-Type':'application/json'});
     if (editingRecordId){
-      const res = await apiFetch(`/api/stations/${activeStationId}/records/${editingRecordId}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error('Update failed');
+      const res = await apiFetch(`/api/stations/${activeStationId}/records/${editingRecordId}`, { method:'PUT', headers, body: JSON.stringify(payload) });
+      if (!res.ok) {
+        const txt = await res.text().catch(()=>res.status); throw new Error(txt || 'Update failed');
+      }
       showBanner('Record updated', 'info');
       editingRecordId=null; recordForm.reset(); await loadStationRecords(activeStationId); return;
     }
@@ -631,12 +681,12 @@ recordForm && recordForm.addEventListener('submit', async (e)=>{
     const dup = lastLoadedRecords.find(r => r.date === payload.date);
     if (dup){
       if (!confirm('A record for this date already exists. Overwrite it?')) return;
-      const res = await apiFetch(`/api/stations/${activeStationId}/records/${dup.id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-      if (!res.ok) throw new Error('Update failed');
+      const res = await apiFetch(`/api/stations/${activeStationId}/records/${dup.id}`, { method:'PUT', headers, body: JSON.stringify(payload) });
+      if (!res.ok) { const txt = await res.text().catch(()=>res.status); throw new Error(txt || 'Update failed'); }
       showBanner('Record updated', 'info'); recordForm.reset(); await loadStationRecords(activeStationId); return;
     }
-    const res = await apiFetch(`/api/stations/${activeStationId}/records`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
-    if (!res.ok) throw new Error('Save failed');
+    const res = await apiFetch(`/api/stations/${activeStationId}/records`, { method:'POST', headers, body: JSON.stringify(payload) });
+    if (!res.ok) { const txt = await res.text().catch(()=>res.status); throw new Error(txt || 'Save failed'); }
     await loadStationRecords(activeStationId); showBanner('Record saved', 'info'); recordForm.reset();
   } catch(err){ showBanner('Failed to save record: ' + (err.message||err), 'error'); }
 });
@@ -652,7 +702,8 @@ function startEditRecord(record){
 async function deleteRecord(rid){
   if (!confirm('Delete this record?')) return;
   try{
-    const res = await apiFetch(`/api/stations/${activeStationId}/records/${rid}`, { method:'DELETE' });
+    const headers = getAuthHeaders();
+    const res = await apiFetch(`/api/stations/${activeStationId}/records/${rid}`, { method:'DELETE', headers });
     if (!res.ok) throw new Error('Delete failed');
     showBanner('Record deleted', 'info'); await loadStationRecords(activeStationId);
   } catch(e){ showBanner('Failed to delete record: ' + (e.message||e), 'error'); }
@@ -760,10 +811,10 @@ async function exportCsvForActiveStation(){
   if (to) params.push('to=' + encodeURIComponent(to));
   const url = '/api/stations/' + encodeURIComponent(activeStationId) + '/records' + (params.length ? ('?' + params.join('&')) : '');
   try{
-    const token = localStorage.getItem(TOKEN_KEY); const headers = token ? { 'Authorization': 'Bearer ' + token } : {};
+    const headers = getAuthHeaders();
     const res = await apiFetch(url, { headers }); if (!res.ok) throw new Error('Failed to fetch records');
-    const j = await res.json(); const recs = j.records || [];
-    if (!recs.length) return alert('No records to export for selected range');
+  const j = await res.json(); const recs = (j.records || []).map(normalizeRecord);
+  if (!recs.length) return alert('No records to export for selected range');
     const cols = ['date','startOfDay','givenOut','remaining','needRepair','damaged','notes'];
     const rows = recs.map(r => cols.map(c => '"' + String(r[c] || '').replace(/"/g,'""') + '"').join(','));
     const csv = cols.join(',') + '\n' + rows.join('\n');
@@ -901,7 +952,12 @@ function unlockUI(){ if (authGate) authGate.classList.add('hidden'); if (appEl){
 // ----- Init -----
 function init(){
   probePrimary().then(()=> checkSession().then(ok=>{
-    if (ok){ if (loginScreen) loginScreen.classList.add('hidden'); if (appEl) appEl.classList.remove('hidden'); setActiveNav('dashboard'); }
+    if (ok){
+      if (loginScreen) loginScreen.classList.add('hidden');
+      if (appEl) appEl.classList.remove('hidden');
+      // fetch stations from server and then show dashboard (falls back to local data if fetch fails)
+      fetchStations().then(()=> setActiveNav('dashboard')).catch(()=> setActiveNav('dashboard'));
+    }
     else { if (loginScreen) loginScreen.classList.remove('hidden'); if (appEl) appEl.classList.add('hidden'); lockUI(); }
     // ensure sim controls exist and wire them
     ensureSimControls();
@@ -939,3 +995,4 @@ function init(){
 }
 
 init();
+ 
